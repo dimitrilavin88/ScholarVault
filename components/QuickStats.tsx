@@ -45,9 +45,9 @@ export default function QuickStats() {
         <div key={index} className="card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-secondary-600">{stat.title}</p>
-              <p className="text-2xl font-bold text-secondary-900">{stat.value}</p>
-              <p className="text-xs text-secondary-500">{stat.description}</p>
+              <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+              <p className="text-xs text-gray-500">{stat.description}</p>
             </div>
             <div className={`p-3 rounded-lg ${
               stat.icon === Users ? 'bg-blue-100' :
@@ -68,11 +68,11 @@ export default function QuickStats() {
               <span className={`text-sm font-medium ${
                 stat.changeType === 'positive' ? 'text-green-600' :
                 stat.changeType === 'negative' ? 'text-red-600' :
-                'text-secondary-600'
+                'text-gray-600'
               }`}>
                 {stat.change}
               </span>
-              <span className="text-xs text-secondary-500 ml-1">from last month</span>
+              <span className="text-xs text-gray-500 ml-1">from last month</span>
             </div>
           )}
         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Search, User, Mail, Hash, School, Calendar } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { demoStudents } from '@/data/demoData'
 
 interface Student {
   id: string
