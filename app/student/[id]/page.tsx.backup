@@ -103,8 +103,8 @@ export default function StudentProfilePage() {
     setFilteredSamples(filtered)
   }, [filters, workSamples])
 
-  const subjects = Array.from(new Set(workSamples.map(sample => sample.subject)))
-  const gradeLevels = Array.from(new Set(workSamples.map(sample => sample.gradeLevel)))
+  const subjects = [...new Set(workSamples.map(sample => sample.subject))]
+  const gradeLevels = [...new Set(workSamples.map(sample => sample.gradeLevel))]
 
   if (isLoading) {
     return (

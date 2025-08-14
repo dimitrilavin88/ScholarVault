@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import { X, Eye, EyeOff, Mail, Lock, User, School, Building } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { validateTeacherDomain } from '@/lib/domainValidation'
 
 interface LoginFormProps {
   onClose: () => void
 }
 
 export default function LoginForm({ onClose }: LoginFormProps) {
+  const { signUp, signIn } = useAuth()
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,11 +24,17 @@ export default function LoginForm({ onClose }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [domainValidation, setDomainValidation] = useState<{
+    isValid: boolean
+    schoolName?: string
+    districtName?: string
+  } | null>(null)
 
   const handleModeToggle = (signUp: boolean) => {
     setIsSignUp(signUp)
     setError('')
     setSuccess('')
+    setDomainValidation(null)
     // Reset form fields when switching modes
     if (signUp) {
       setEmail('')
@@ -39,6 +48,30 @@ export default function LoginForm({ onClose }: LoginFormProps) {
       setEmail('')
       setPassword('')
       setConfirmPassword('')
+    }
+  }
+
+  const handleEmailChange = async (emailValue: string) => {
+    setEmail(emailValue)
+    
+    if (isSignUp && emailValue.includes('@')) {
+      try {
+        const validation = await validateTeacherDomain(emailValue)
+        setDomainValidation({
+          isValid: validation.isValid,
+          schoolName: validation.schoolName,
+          districtName: validation.districtName
+        })
+        
+        if (validation.isValid && validation.schoolName && validation.districtName) {
+          setSchool(validation.schoolName)
+          setDistrict(validation.districtName)
+        }
+      } catch (error) {
+        console.error('Domain validation error:', error)
+      }
+    } else {
+      setDomainValidation(null)
     }
   }
 
@@ -65,9 +98,22 @@ export default function LoginForm({ onClose }: LoginFormProps) {
           setError('Password must be at least 8 characters long')
           return
         }
+
+        // Validate domain
+        if (!domainValidation?.isValid) {
+          setError('Please enter a valid email from an approved school domain')
+          return
+        }
         
-        // Simulate signup API call
-        await new Promise(resolve => setTimeout(resolve, 1500))
+        // Create account using Firebase
+        await signUp(email, password, {
+          firstName,
+          lastName,
+          email,
+          school,
+          district,
+          role: 'Teacher'
+        })
         
         setSuccess('Account created successfully! You can now sign in.')
         // Reset form and switch to login mode
@@ -83,14 +129,15 @@ export default function LoginForm({ onClose }: LoginFormProps) {
           return
         }
         
-        // Simulate login API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        // Sign in using Firebase
+        await signIn(email, password)
         
-        // For demo purposes, accept any email/password
+        // Close modal and redirect to dashboard
+        onClose()
         window.location.href = '/dashboard'
       }
-    } catch (err) {
-      setError(isSignUp ? 'Signup failed. Please try again.' : 'Login failed. Please try again.')
+    } catch (err: any) {
+      setError(err.message || (isSignUp ? 'Signup failed. Please try again.' : 'Login failed. Please try again.'))
     } finally {
       setIsLoading(false)
     }
@@ -239,12 +286,28 @@ export default function LoginForm({ onClose }: LoginFormProps) {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input-field pl-10"
+                onChange={(e) => handleEmailChange(e.target.value)}
+                className={`input-field pl-10 ${
+                  domainValidation && !domainValidation.isValid ? 'border-red-500' : 
+                  domainValidation && domainValidation.isValid ? 'border-green-500' : ''
+                }`}
                 placeholder="teacher@school.edu"
                 required
               />
             </div>
+            
+            {/* Domain validation feedback */}
+            {domainValidation && (
+              <div className={`mt-2 text-sm ${
+                domainValidation.isValid ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {domainValidation.isValid ? (
+                  <span>✓ Valid school domain: {domainValidation.schoolName} ({domainValidation.districtName})</span>
+                ) : (
+                  <span>✗ Invalid or unapproved domain</span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="mb-4">

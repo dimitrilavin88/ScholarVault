@@ -18,7 +18,10 @@ export default function HomePage() {
               <h1 className="text-2xl font-bold text-gray-900">ScholarVault</h1>
             </div>
             <button
-              onClick={() => setShowLogin(true)}
+              onClick={() => {
+                console.log('Teacher Login button clicked')
+                setShowLogin(true)
+              }}
               className="btn-primary"
             >
               Teacher Login

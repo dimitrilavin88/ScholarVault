@@ -6,11 +6,12 @@ ScholarVault is a secure web application that allows K-12 teachers to access and
 
 ### Core MVP Features
 
-1. **Secure Teacher Login**
+1. **Secure Teacher Authentication**
 
-   - Email/password authentication
-   - Role-based permissions to control access
-   - Demo credentials: `teacher@demo.edu` / any password
+   - Firebase Authentication with email/password
+   - Email domain validation for approved school districts
+   - Teacher profile creation and management
+   - Secure session management
 
 2. **Student Search**
 
@@ -36,10 +37,13 @@ ScholarVault is a secure web application that allows K-12 teachers to access and
 
 ## 🛠️ Technical Stack
 
-- **Frontend:** React 18 + Next.js 14 (App Router)
+- **Frontend:** React 18 + Next.js 13.5.6 (App Router)
 - **Styling:** Tailwind CSS
 - **Icons:** Lucide React
 - **TypeScript:** Full type safety
+- **Authentication:** Firebase Authentication
+- **Database:** Google Cloud Firestore
+- **State Management:** React Context API
 - **Responsive Design:** Mobile-first approach
 
 ## 📁 Project Structure
@@ -50,17 +54,28 @@ ScholarVault/
 │   ├── dashboard/               # Teacher dashboard
 │   ├── student/[id]/           # Student profile pages
 │   ├── globals.css             # Global styles
-│   ├── layout.tsx              # Root layout
+│   ├── layout.tsx              # Root layout with AuthProvider
 │   └── page.tsx                # Landing page
 ├── components/                  # Reusable components
-│   ├── LoginForm.tsx           # Authentication modal
+│   ├── LoginForm.tsx           # Firebase authentication modal
 │   ├── StudentSearch.tsx       # Student search functionality
 │   ├── QuickStats.tsx          # Dashboard statistics
 │   ├── RecentStudents.tsx      # Recently viewed students
 │   └── WorkSampleViewer.tsx    # Work sample preview modal
-├── package.json                 # Dependencies and scripts
+├── contexts/                    # React Context providers
+│   └── AuthContext.tsx         # Firebase authentication context
+├── lib/                        # Utility libraries
+│   ├── firebase.ts             # Firebase configuration
+│   └── domainValidation.ts     # Email domain validation
+├── data/                       # Mock data and interfaces
+│   └── demoData.ts             # Sample student and work sample data
+├── scripts/                    # Setup scripts
+│   └── setupFirestore.js       # Firestore initialization script
+├── package.json                # Dependencies and scripts
 ├── tailwind.config.js          # Tailwind CSS configuration
 ├── tsconfig.json               # TypeScript configuration
+├── firebase-config.example     # Firebase configuration template
+├── FIREBASE_SETUP.md           # Detailed Firebase setup guide
 └── README.md                   # Project documentation
 ```
 
@@ -70,6 +85,7 @@ ScholarVault/
 
 - Node.js 18+
 - npm or yarn
+- Firebase project (see setup guide below)
 
 ### Installation
 
@@ -86,13 +102,37 @@ ScholarVault/
    npm install
    ```
 
-3. **Run the development server**
+3. **Set up Firebase**
+
+   Follow the detailed setup guide in [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) to:
+
+   - Create a Firebase project
+   - Enable Authentication and Firestore
+   - Configure environment variables
+   - Set up security rules
+
+4. **Configure environment variables**
+
+   Copy `firebase-config.example` to `.env.local` and fill in your Firebase configuration:
+
+   ```bash
+   cp firebase-config.example .env.local
+   # Edit .env.local with your Firebase config
+   ```
+
+5. **Initialize Firestore**
+
+   ```bash
+   node scripts/setupFirestore.js
+   ```
+
+6. **Run the development server**
 
    ```bash
    npm run dev
    ```
 
-4. **Open your browser**
+7. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
 ### Available Scripts
@@ -102,111 +142,88 @@ ScholarVault/
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
 
-## 🎯 Demo Walkthrough
+## 🔐 Firebase Setup
 
-### 1. Landing Page
+### Quick Setup
 
-- View the ScholarVault introduction and features
-- Click "Teacher Login" or "Get Started" to access the login form
+1. **Create Firebase Project**: Go to [Firebase Console](https://console.firebase.google.com/)
+2. **Enable Services**: Enable Authentication (Email/Password) and Firestore Database
+3. **Configure App**: Get your Firebase config and add to `.env.local`
+4. **Set Security Rules**: Use the rules provided in `FIREBASE_SETUP.md`
+5. **Populate Data**: Run the setup script to add approved domains
 
-### 2. Teacher Login
+### Environment Variables
 
-- Use demo credentials: `teacher@demo.edu` / any password
-- Click "Sign In" to access the dashboard
+Create a `.env.local` file with your Firebase configuration:
 
-### 3. Dashboard
+```bash
+NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
+NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+```
 
-- View quick statistics and recent students
-- Use the student search to find specific students
-- Click on recent students to view their profiles
+## 🧪 Testing
 
-### 4. Student Search
+### Demo Accounts
 
-- Search by name (e.g., "Emma", "Marcus", "Sophia")
-- Search by student ID (e.g., "STU001", "STU002")
-- Search by email (e.g., "emma.rodriguez@student.edu")
-- Click on search results to view student profiles
+For testing purposes, the following domains are pre-approved:
 
-### 5. Student Profile
+- `demo.edu` - Demo School District
+- `lincoln.edu` - Lincoln Unified School District
+- `springfield.k12.tx.us` - Springfield Independent School District
+- `ousd.org` - Oakland Unified School District
 
-- View comprehensive student information
-- Browse school history across districts
-- Filter and sort work samples by subject, grade, or date
-- Click "View" to preview work samples
-- Click "Download" to download files
+### Test Flow
 
-### 6. Work Sample Viewer
+1. Create a new teacher account with an approved email domain
+2. Sign in with your credentials
+3. Access the dashboard and search for students
+4. View student profiles and work samples
 
-- Preview document content (mock data for demo)
-- Download work samples
-- View file metadata and access logs
+## 🚀 Deployment
 
-## 🔒 Security & Compliance
+### Build for Production
 
-- **FERPA Compliant:** Student data protection standards
-- **COPPA Compliant:** Children's online privacy protection
-- **Audit Logging:** All access is tracked for compliance
-- **Role-Based Access:** Teachers only see relevant students
-- **Secure Authentication:** Protected login system
+```bash
+npm run build
+npm run start
+```
 
-## 🎨 Design System
+### Environment Setup
 
-### Color Palette
+Ensure your production environment has:
 
-- **Primary:** Blue tones for main actions and branding
-- **Secondary:** Gray tones for text and backgrounds
-- **Accent:** Green for success, red for errors
+- All required Firebase environment variables
+- Proper Firestore security rules
+- Domain authorization in Firebase Console
 
-### Components
+## 📚 Documentation
 
-- **Buttons:** Primary (blue), Secondary (gray)
-- **Cards:** White backgrounds with subtle shadows
-- **Forms:** Clean input fields with focus states
-- **Modals:** Overlay dialogs for detailed views
-
-### Responsive Breakpoints
-
-- **Mobile:** 320px - 768px
-- **Tablet:** 768px - 1024px
-- **Desktop:** 1024px+
-
-## 🔮 Future Enhancements
-
-### Not in MVP (Future Features)
-
-- Direct student uploads
-- Parent access portal
-- Feedback/comment tools
-- Automatic integration with district SIS/LMS
-- Advanced analytics and reporting
-- Mobile app development
+- [Firebase Setup Guide](./FIREBASE_SETUP.md) - Complete Firebase configuration
+- [Firebase Documentation](https://firebase.google.com/docs) - Official Firebase docs
+- [Next.js Documentation](https://nextjs.org/docs) - Next.js framework docs
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-## 📝 License
+## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🆘 Support
 
-For support and questions:
+If you encounter issues:
 
-- Create an issue in the repository
-- Contact the development team
-- Check the documentation
-
-## 🙏 Acknowledgments
-
-- Built for K-12 educators and administrators
-- Designed with FERPA and COPPA compliance in mind
-- Focused on improving student learning outcomes through better data access
-
----
-
-**ScholarVault** - Empowering teachers with comprehensive student insights across time and districts.
+1. Check the [Firebase Setup Guide](./FIREBASE_SETUP.md)
+2. Review Firebase Console logs
+3. Check browser console for client-side errors
+4. Verify environment variables are correctly set
+5. Ensure Firestore security rules are properly configured
