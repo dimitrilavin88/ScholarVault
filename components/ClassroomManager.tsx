@@ -11,15 +11,20 @@ import {
   collection, 
   updateDoc, 
   deleteDoc, 
-  serverTimestamp 
+  serverTimestamp,
+  getDocs,
+  query,
+  where,
+  getDoc,
+  orderBy
 } from 'firebase/firestore'
 
 interface Student {
   id: string
-  firstName: string
-  lastName: string
-  grade: string
-  email: string
+  name: string
+  gradeLevel: string
+  classrooms: string[]
+  createdAt: Date
 }
 
 interface Classroom {
@@ -85,61 +90,182 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
   // Search functionality for students
   const [studentSearchQuery, setStudentSearchQuery] = useState('')
 
+  // Store fetched student data
+  const [studentsData, setStudentsData] = useState<{ [key: string]: Student }>({})
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false)
+
   // Mock student data for demonstration - replace with real student data later
-  const getStudentDisplayInfo = (studentId: string) => {
-    // This is temporary - you'll want to fetch real student data from your students collection
-    // For now, we'll create a mock student object based on the ID
-    return {
-      id: studentId,
-      firstName: `Student ${studentId.slice(-3)}`, // Last 3 chars of ID
-      lastName: 'Name',
-      grade: '10th',
-      email: `student${studentId.slice(-3)}@school.edu`
+  const getStudentDisplayInfo = (studentId: string): Student | null => {
+    // Return real student data from Firebase
+    return studentsData[studentId] || null
+  }
+
+  // Fetch students for the selected classroom
+  const fetchStudentsForClassroom = async (classroomId: string) => {
+    if (!classroomId) return
+
+    try {
+      setIsLoadingStudents(true)
+      console.log('Fetching students for classroom:', classroomId)
+
+      // Query students collection where classrooms array contains the classroom ID
+      const studentsRef = collection(db, 'students')
+      const studentsQuery = query(
+        studentsRef,
+        where('classrooms', 'array-contains', classroomId)
+      )
+
+      const querySnapshot = await getDocs(studentsQuery)
+      const students: { [key: string]: Student } = {}
+
+      querySnapshot.forEach((doc) => {
+        const studentData = doc.data()
+        students[doc.id] = {
+          id: doc.id,
+          name: studentData.name || 'Unknown Name',
+          gradeLevel: studentData.gradeLevel || 'Unknown Grade',
+          classrooms: studentData.classrooms || [],
+          createdAt: studentData.createdAt?.toDate() || new Date()
+        }
+      })
+
+      console.log(`Found ${Object.keys(students).length} students for classroom ${classroomId}`)
+      setStudentsData(students)
+    } catch (error) {
+      console.error('Error fetching students for classroom:', error)
+      setError('Failed to fetch students. Please try again.')
+    } finally {
+      setIsLoadingStudents(false)
+    }
+  }
+
+  // Manual refresh function for debugging
+  const handleManualRefresh = async () => {
+    console.log('Manual refresh triggered')
+    console.log('Current TeacherDataManager state:', {
+      user: teacherDataManagerUser,
+      classrooms: teacherDataManagerClassrooms,
+      loading: teacherDataManagerLoading,
+      error: teacherDataManagerError
+    })
+    
+    try {
+      // Try to refresh TeacherDataManager data
+      await teacherDataManager.refreshData()
+      
+      // Wait a moment for data to update
+      setTimeout(() => {
+        const refreshedUser = teacherDataManager.getCurrentUser()
+        const refreshedClassrooms = teacherDataManager.getClassrooms()
+        console.log('After refresh - User:', refreshedUser)
+        console.log('After refresh - Classrooms:', refreshedClassrooms)
+        
+        // Force reload of classrooms
+        if (effectiveTeacherId) {
+          loadClassrooms()
+        }
+      }, 1000)
+    } catch (error) {
+      console.error('Manual refresh failed:', error)
+    }
+  }
+
+  // Load classrooms from TeacherDataManager or Firebase
+  const loadClassrooms = async () => {
+    if (!effectiveTeacherId) return
+    
+    try {
+      setIsLoadingData(true)
+      console.log('Loading classrooms for effectiveTeacherId:', effectiveTeacherId)
+      console.log('TeacherDataManager user data:', teacherDataManagerUser)
+      console.log('TeacherDataManager classrooms:', teacherDataManagerClassrooms)
+      
+      // Check if TeacherDataManager has data
+      if (teacherDataManagerUser && teacherDataManagerUser.classrooms && teacherDataManagerUser.classrooms.length > 0) {
+        console.log('Using classrooms from TeacherDataManager:', teacherDataManagerUser.classrooms)
+        
+        // Convert TeacherDataManager classrooms to our Classroom interface
+        const loadedClassrooms: Classroom[] = teacherDataManagerUser.classrooms.map((classroom: any) => ({
+          id: classroom.id,
+          name: classroom.name,
+          schoolYear: classroom.schoolYear,
+          teacherId: classroom.teacherId,
+          students: classroom.students || [],
+          createdAt: classroom.createdAtDate || classroom.createdAt || new Date()
+        }))
+        
+        console.log('Converted classrooms:', loadedClassrooms)
+        setClassrooms(loadedClassrooms)
+        if (loadedClassrooms.length > 0) {
+          setSelectedClassroom(loadedClassrooms[0])
+        } else {
+          setSelectedClassroom(null)
+        }
+      } else {
+        console.log('No classrooms found in TeacherDataManager, trying direct Firebase query...')
+        
+        // Fallback: Query Firebase directly for classrooms
+        try {
+          const classroomsRef = collection(db, 'classrooms')
+          const classroomsQuery = query(
+            classroomsRef,
+            where('teacherId', '==', effectiveTeacherId),
+            orderBy('createdAt', 'desc')
+          )
+          
+          const querySnapshot = await getDocs(classroomsQuery)
+          const directClassrooms: Classroom[] = []
+          
+          querySnapshot.forEach((doc) => {
+            const data = doc.data()
+            directClassrooms.push({
+              id: doc.id,
+              name: data.name,
+              schoolYear: data.schoolYear,
+              teacherId: data.teacherId,
+              students: data.students || [],
+              createdAt: data.createdAt?.toDate() || new Date()
+            })
+          })
+          
+          console.log('Direct Firebase query found classrooms:', directClassrooms)
+          setClassrooms(directClassrooms)
+          if (directClassrooms.length > 0) {
+            setSelectedClassroom(directClassrooms[0])
+          } else {
+            setSelectedClassroom(null)
+          }
+        } catch (directQueryError) {
+          console.error('Direct Firebase query failed:', directQueryError)
+          setClassrooms([])
+          setSelectedClassroom(null)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading classrooms:', error)
+      setError('Failed to load classrooms. Please try again.')
+      setClassrooms([])
+      setSelectedClassroom(null)
+    } finally {
+      setIsLoadingData(false)
     }
   }
 
   // Load classrooms from TeacherDataManager
   useEffect(() => {
-    if (!effectiveTeacherId) return
-    
-    const loadClassrooms = async () => {
-      try {
-        setIsLoadingData(true)
-        console.log('Loading classrooms for effectiveTeacherId:', effectiveTeacherId)
-        
-        // Check if TeacherDataManager has data
-        if (teacherDataManagerUser && teacherDataManagerUser.classrooms) {
-          console.log('Using classrooms from TeacherDataManager:', teacherDataManagerUser.classrooms)
-          
-          // Convert TeacherDataManager classrooms to our Classroom interface
-          const loadedClassrooms: Classroom[] = teacherDataManagerUser.classrooms.map((classroom: any) => ({
-            id: classroom.id,
-            name: classroom.name,
-            schoolYear: classroom.schoolYear,
-            teacherId: classroom.teacherId,
-            students: classroom.students || [],
-            createdAt: classroom.createdAtDate || classroom.createdAt || new Date()
-          }))
-          
-          console.log('Converted classrooms:', loadedClassrooms)
-          setClassrooms(loadedClassrooms)
-          if (loadedClassrooms.length > 0) {
-            setSelectedClassroom(loadedClassrooms[0])
-          }
-        } else {
-          console.log('No classrooms found in TeacherDataManager')
-          setClassrooms([])
-        }
-      } catch (error) {
-        console.error('Error loading classrooms:', error)
-        setError('Failed to load classrooms. Please try again.')
-      } finally {
-        setIsLoadingData(false)
-      }
+    if (effectiveTeacherId) {
+      loadClassrooms()
     }
+  }, [effectiveTeacherId, teacherDataManagerUser, teacherDataManagerClassrooms])
 
-    loadClassrooms()
-  }, [effectiveTeacherId, teacherDataManagerUser])
+  // Fetch students when a classroom is selected
+  useEffect(() => {
+    if (selectedClassroom && selectedClassroom.id) {
+      fetchStudentsForClassroom(selectedClassroom.id)
+    } else {
+      setStudentsData({})
+    }
+  }, [selectedClassroom])
 
   // Don't render if still loading authentication or no teacherId
   if (loading || !effectiveTeacherId) {
@@ -151,6 +277,8 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
           <p className="text-sm mt-2">Teacher ID: {effectiveTeacherId || 'Not available'}</p>
           <p className="text-sm">Auth Loading: {loading ? 'Yes' : 'No'}</p>
           <p className="text-sm">Current User UID: {currentUser?.uid || 'Not available'}</p>
+          <p className="text-sm">Students Data Count: {Object.keys(studentsData).length}</p>
+          <p className="text-sm">Students Data Keys: {Object.keys(studentsData).join(', ') || 'None'}</p>
         </div>
       </div>
     )
@@ -225,22 +353,24 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
         return
       }
 
-      // Create new student object
-      const student: Student = {
-        id: Date.now().toString(), // Generate unique ID
-        firstName: newStudent.firstName,
-        lastName: newStudent.lastName,
-        grade: newStudent.grade,
-        email: newStudent.email
+      // Create new student document in Firebase
+      const studentData = {
+        name: `${newStudent.firstName} ${newStudent.lastName}`,
+        gradeLevel: newStudent.grade,
+        classrooms: [selectedClassroom.id],
+        createdAt: serverTimestamp()
       }
 
-      // Add student to selected classroom
+      const studentDocRef = await addDoc(collection(db, 'students'), studentData)
+      const studentId = studentDocRef.id
+
+      // Add student ID to selected classroom
       const updatedClassroom = {
         ...selectedClassroom,
-        students: [...selectedClassroom.students, student.id]
+        students: [...selectedClassroom.students, studentId]
       }
 
-      // Update in Firebase
+      // Update classroom in Firebase
       const classroomRef = doc(db, 'classrooms', selectedClassroom.id)
       await updateDoc(classroomRef, {
         students: updatedClassroom.students
@@ -252,6 +382,9 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
       
       // Refresh data in TeacherDataManager
       await teacherDataManager.refreshData()
+      
+      // Refresh students for the classroom
+      await fetchStudentsForClassroom(selectedClassroom.id)
       
       // Reset form
       setNewStudent({ firstName: '', lastName: '', grade: '', email: '' })
@@ -268,19 +401,39 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
   }
 
   const handleClassroomSelect = (classroom: Classroom) => {
-    setSelectedClassroom(classroom)
+    if (classroom && classroom.id && classroom.name) {
+      setSelectedClassroom(classroom)
+    } else {
+      console.error('Invalid classroom object:', classroom)
+      setError('Invalid classroom data. Please try again.')
+    }
   }
 
   const removeStudent = async (studentId: string) => {
     if (!selectedClassroom) return
 
     try {
+      // Remove classroom from student's classrooms array
+      const studentRef = doc(db, 'students', studentId)
+      const studentDoc = await getDoc(studentRef)
+      
+      if (studentDoc.exists()) {
+        const studentData = studentDoc.data()
+        const updatedClassrooms = studentData.classrooms.filter((classId: string) => classId !== selectedClassroom.id)
+        
+        // Update student document
+        await updateDoc(studentRef, {
+          classrooms: updatedClassrooms
+        })
+      }
+
+      // Remove student from classroom
       const updatedClassroom = {
         ...selectedClassroom,
         students: selectedClassroom.students.filter(s => s !== studentId)
       }
 
-      // Update in Firebase
+      // Update classroom in Firebase
       const classroomRef = doc(db, 'classrooms', selectedClassroom.id)
       await updateDoc(classroomRef, {
         students: updatedClassroom.students
@@ -292,6 +445,9 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
       
       // Refresh data in TeacherDataManager
       await teacherDataManager.refreshData()
+      
+      // Refresh students for the classroom
+      await fetchStudentsForClassroom(selectedClassroom.id)
       
       setSuccess('Student removed successfully!')
       setTimeout(() => setSuccess(''), 3000)
@@ -375,6 +531,12 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
         <p>Classrooms from TeacherDataManager: {teacherDataManagerClassrooms.length}</p>
         <p>Local Classrooms State: {classrooms.length}</p>
         <p>Effective Teacher ID: {effectiveTeacherId}</p>
+        <button
+          onClick={handleManualRefresh}
+          className="mt-2 btn-secondary text-sm"
+        >
+          Refresh TeacherDataManager Data
+        </button>
       </div>
 
       {/* Classroom Selection */}
@@ -383,7 +545,7 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
           Select Classroom
         </label>
         <div className="flex flex-wrap gap-2">
-          {classrooms.map((classroom) => (
+          {classrooms.filter(classroom => classroom && classroom.id && classroom.name).map((classroom) => (
             <div key={classroom.id} className="flex items-center gap-2">
               <button
                 onClick={() => handleClassroomSelect(classroom)}
@@ -415,15 +577,15 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-gray-600">Class Name</p>
-                <p className="font-semibold text-gray-900">{selectedClassroom.name}</p>
+                <p className="font-semibold text-gray-900">{selectedClassroom?.name || 'Unknown'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">School Year</p>
-                <p className="font-semibold text-gray-900">{selectedClassroom.schoolYear}</p>
+                <p className="font-semibold text-gray-900">{selectedClassroom?.schoolYear || 'Unknown'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Student Count</p>
-                <p className="font-semibold text-gray-900">{selectedClassroom.students.length}</p>
+                <p className="font-semibold text-gray-900">{Object.keys(studentsData).length}</p>
               </div>
             </div>
           </div>
@@ -434,20 +596,20 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-6 border border-blue-200">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{selectedClassroom.students.length}</div>
+                  <div className="text-2xl font-bold text-blue-600">{Object.keys(studentsData).length}</div>
                   <div className="text-sm text-blue-700">Total Students</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{selectedClassroom.name}</div>
+                  <div className="text-2xl font-bold text-green-600">{selectedClassroom?.name || 'Unknown'}</div>
                   <div className="text-sm text-green-700">Class Name</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{selectedClassroom.schoolYear}</div>
+                  <div className="text-2xl font-bold text-purple-600">{selectedClassroom?.schoolYear || 'Unknown'}</div>
                   <div className="text-sm text-purple-700">School Year</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-orange-600">
-                    {selectedClassroom.students.length > 0 ? 'Active' : 'Empty'}
+                    {(Object.keys(studentsData).length || 0) > 0 ? 'Active' : 'Empty'}
                   </div>
                   <div className="text-sm text-orange-700">Status</div>
                 </div>
@@ -457,7 +619,7 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-lg font-medium text-gray-900 flex items-center">
                 <Users className="h-5 w-5 mr-2 text-green-600" />
-                Students ({selectedClassroom.students.length})
+                Students ({Object.keys(studentsData).length})
               </h4>
               <button
                 onClick={() => setShowAddStudentForm(true)}
@@ -469,12 +631,12 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
             </div>
 
             {/* Student Search */}
-            {selectedClassroom.students.length > 0 && (
+            {(Object.keys(studentsData).length || 0) > 0 && (
               <div className="mb-4">
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Search students by name..."
+                    placeholder="Search students by name or grade..."
                     value={studentSearchQuery}
                     onChange={(e) => setStudentSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -486,20 +648,20 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
                 {studentSearchQuery && (
                   <div className="mt-2 text-sm text-gray-600">
                     {(() => {
-                      const filteredCount = selectedClassroom.students.filter(studentId => {
-                        const student = getStudentDisplayInfo(studentId)
-                        return student.firstName.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-                               student.lastName.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-                               student.email.toLowerCase().includes(studentSearchQuery.toLowerCase())
+                      const filteredCount = Object.values(studentsData).filter(student => {
+                        return student ? (
+                          student.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+                          student.gradeLevel.toLowerCase().includes(studentSearchQuery.toLowerCase())
+                        ) : false
                       }).length
-                      return `Showing ${filteredCount} of ${selectedClassroom.students.length} students`
+                      return `Showing ${filteredCount} of ${Object.keys(studentsData).length} students`
                     })()}
                   </div>
                 )}
               </div>
             )}
 
-            {selectedClassroom.students.length === 0 ? (
+            {(Object.keys(studentsData).length || 0) === 0 ? (
               <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                 <Users className="h-16 w-16 mx-auto mb-4 text-gray-300" />
                 <h5 className="text-lg font-medium mb-2">No Students Yet</h5>
@@ -514,91 +676,98 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
               </div>
             ) : (
               <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Student
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Grade
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Email
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {(() => {
-                      const filteredStudents = selectedClassroom.students
-                        .map(studentId => {
-                          const student = getStudentDisplayInfo(studentId)
+                {isLoadingStudents ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <Loader2 className="h-12 w-12 mx-auto mb-4 text-gray-300 animate-spin" />
+                    <p>Loading students...</p>
+                  </div>
+                ) : (
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Student
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Grade
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {(() => {
+                        // Get all students from studentsData for this classroom
+                        const allStudents = Object.values(studentsData)
+                        
+                        // Filter students based on search query
+                        const filteredStudents = allStudents.filter(student => {
+                          if (!student || !student.name || !student.gradeLevel) return false
                           
-                          // Filter students based on search query
-                          if (studentSearchQuery && 
-                              !student.firstName.toLowerCase().includes(studentSearchQuery.toLowerCase()) &&
-                              !student.lastName.toLowerCase().includes(studentSearchQuery.toLowerCase()) &&
-                              !student.email.toLowerCase().includes(studentSearchQuery.toLowerCase())) {
+                          if (studentSearchQuery) {
+                            return student.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+                                   student.gradeLevel.toLowerCase().includes(studentSearchQuery.toLowerCase())
+                          }
+                          
+                          return true
+                        })
+                      
+                        if (filteredStudents.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={3} className="px-6 py-12 text-center text-gray-500">
+                                <Search className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                                <p className="text-lg font-medium mb-2">No Students Found</p>
+                                <p className="text-sm">Try adjusting your search terms or add new students.</p>
+                              </td>
+                            </tr>
+                          )
+                        }
+                        
+                        return filteredStudents.map((student) => {
+                          // Skip rendering if student is null or missing required properties
+                          if (!student || !student.name || !student.gradeLevel) {
                             return null
                           }
                           
-                          return { studentId, student }
-                        })
-                        .filter((item): item is { studentId: string; student: any } => item !== null)
-                      
-                      if (filteredStudents.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
-                              <Search className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                              <p className="text-lg font-medium mb-2">No Students Found</p>
-                              <p className="text-sm">Try adjusting your search terms or add new students.</p>
-                            </td>
-                          </tr>
-                        )
-                      }
-                      
-                      return filteredStudents.map(({ studentId, student }) => (
-                        <tr key={studentId} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                <GraduationCap className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {student.firstName} {student.lastName}
+                          return (
+                            <tr key={student.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <GraduationCap className="h-5 w-5 text-blue-600" />
+                                  </div>
+                                  <div className="ml-4">
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {student.name}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      ID: {student.id}
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="text-sm text-gray-500">
-                                  ID: {studentId}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              {student.grade}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {student.email}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button
-                              onClick={() => removeStudent(studentId)}
-                              className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded"
-                            >
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    })()}
-                  </tbody>
-                </table>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  {student.gradeLevel}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button
+                                  onClick={() => removeStudent(student.id)}
+                                  className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded"
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        }).filter(Boolean)
+                      })()}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
           </div>
