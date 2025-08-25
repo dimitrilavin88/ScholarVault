@@ -1,15 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, User, LogOut, GraduationCap, Bell } from 'lucide-react'
+import { Search, User, LogOut, GraduationCap, Bell, BookOpen } from 'lucide-react'
 import StudentSearch from '@/components/StudentSearch'
 import RecentStudents from '@/components/RecentStudents'
 import QuickStats from '@/components/QuickStats'
+import ClassroomManager from '@/components/ClassroomManager'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function DashboardPage() {
-  const { logOut, teacherData } = useAuth()
+  const { logOut, teacherData, currentUser, loading } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
+
+  console.log('Dashboard - currentUser:', currentUser)
+  console.log('Dashboard - currentUser?.uid:', currentUser?.uid)
+  console.log('Dashboard - teacherData:', teacherData)
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
@@ -103,6 +108,23 @@ export default function DashboardPage() {
             Recently Viewed Students
           </h3>
           <RecentStudents />
+        </div>
+
+        {/* Classroom Manager */}
+        <div className="mt-8">
+          {currentUser && currentUser.uid ? (
+            <ClassroomManager teacherId={currentUser.uid} />
+          ) : (
+            <div className="card">
+              <div className="text-center py-8 text-gray-500">
+                <BookOpen className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                <p>Loading user authentication...</p>
+                <p className="text-sm mt-2">Current User: {currentUser ? 'Yes' : 'No'}</p>
+                <p className="text-sm">User UID: {currentUser?.uid || 'Not available'}</p>
+                <p className="text-sm">Auth Loading: {loading ? 'Yes' : 'No'}</p>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

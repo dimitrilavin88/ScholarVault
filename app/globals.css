@@ -28,4 +28,16 @@
   .radio-button {
     @apply w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 focus:ring-2;
   }
+  
+  .classroom-tab {
+    @apply px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200;
+  }
+  
+  .classroom-tab-active {
+    @apply bg-blue-600 text-white;
+  }
+  
+  .classroom-tab-inactive {
+    @apply bg-gray-100 text-gray-700 hover:bg-gray-200;
+  }
 }

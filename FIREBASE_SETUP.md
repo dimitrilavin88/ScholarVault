@@ -69,6 +69,14 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == teacherId;
     }
 
+    // Teachers can manage their own classrooms
+    match /classrooms/{classroomId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.teacherId;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.teacherId;
+    }
+
     // Anyone can read approved domains
     match /approvedDomains/{domainId} {
       allow read: if true;
