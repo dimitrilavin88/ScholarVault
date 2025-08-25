@@ -44,7 +44,11 @@ export default function DashboardPage() {
               <div className="flex items-center space-x-3">
                                   <div className="text-right">
                     <p className="text-sm font-medium text-gray-900">
-                      {teacherData ? `${teacherData.firstName} ${teacherData.lastName}` : 'Loading...'}
+                      {teacherData ? (() => {
+                        const title = teacherData.gender?.toLowerCase() === 'male' ? 'Mr.' : 
+                                     teacherData.gender?.toLowerCase() === 'female' ? 'Mrs.' : '';
+                        return title ? `${title} ${teacherData.lastName}` : `${teacherData.firstName} ${teacherData.lastName}`;
+                      })() : 'Loading...'}
                     </p>
                     <p className="text-xs text-gray-500">
                       {teacherData ? `Teacher - ${teacherData.school}` : 'Loading...'}
@@ -69,14 +73,18 @@ export default function DashboardPage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
-                      <div className="mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                  Welcome back, {teacherData?.firstName || 'Teacher'}!
-                </h2>
-                <p className="text-gray-600">
-                  Search for students to view their academic portfolios and work samples.
-                </p>
-              </div>
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back, {teacherData ? (() => {
+              const title = teacherData.gender?.toLowerCase() === 'male' ? 'Mr.' : 
+                           teacherData.gender?.toLowerCase() === 'female' ? 'Mrs.' : '';
+              return title ? `${title} ${teacherData.lastName}` : teacherData.firstName;
+            })() : 'Teacher'}!
+          </h2>
+          <p className="text-gray-600">
+            Search for students to view their academic portfolios and work samples.
+          </p>
+        </div>
 
         {/* Quick Stats */}
         <QuickStats />

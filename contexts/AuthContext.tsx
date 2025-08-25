@@ -15,6 +15,7 @@ import { auth, db } from '@/lib/firebase'
 interface TeacherData {
   firstName: string
   lastName: string
+  gender: string
   email: string
   school: string
   district: string
@@ -47,6 +48,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [teacherData, setTeacherData] = useState<TeacherData | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Helper function to get appropriate title based on gender
+  function getTitle(gender: string): string {
+    const normalizedGender = gender.toLowerCase().trim()
+    if (normalizedGender === 'male' || normalizedGender === 'm') {
+      return 'Mr.'
+    } else if (normalizedGender === 'female' || normalizedGender === 'f') {
+      return 'Mrs.'
+    }
+    return '' // Return empty string for unknown gender
+  }
+
   async function signUp(
     email: string, 
     password: string, 
@@ -57,9 +69,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
 
-      // Update user profile with display name
+      // Update user profile with display name using title and last name
+      const title = getTitle(teacherData.gender)
+      const displayName = title ? `${title} ${teacherData.lastName}` : `${teacherData.firstName} ${teacherData.lastName}`
+      
       await updateProfile(user, {
-        displayName: `${teacherData.firstName} ${teacherData.lastName}`
+        displayName: displayName
       })
 
       // Store teacher data in Firestore

@@ -17,6 +17,7 @@ export default function LoginForm({ onClose }: LoginFormProps) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [gender, setGender] = useState('')
   const [school, setSchool] = useState('')
   const [district, setDistrict] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -42,6 +43,7 @@ export default function LoginForm({ onClose }: LoginFormProps) {
       setConfirmPassword('')
       setFirstName('')
       setLastName('')
+      setGender('')
       setSchool('')
       setDistrict('')
     } else {
@@ -84,7 +86,7 @@ export default function LoginForm({ onClose }: LoginFormProps) {
     try {
       if (isSignUp) {
         // Handle signup
-        if (!email || !password || !confirmPassword || !firstName || !lastName || !school || !district) {
+        if (!email || !password || !confirmPassword || !firstName || !lastName || !gender || !school || !district) {
           setError('Please fill in all required fields')
           return
         }
@@ -109,6 +111,7 @@ export default function LoginForm({ onClose }: LoginFormProps) {
         await signUp(email, password, {
           firstName,
           lastName,
+          gender,
           email,
           school,
           district,
@@ -234,6 +237,39 @@ export default function LoginForm({ onClose }: LoginFormProps) {
                       required
                     />
                   </div>
+                </div>
+              </div>
+              
+              {/* Gender Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Gender
+                </label>
+                <div className="flex space-x-6">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="male"
+                      checked={gender === 'male'}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="radio-button mr-2"
+                      required
+                    />
+                    <span className="text-sm text-gray-700">Male</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="female"
+                      checked={gender === 'female'}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="radio-button mr-2"
+                      required
+                    />
+                    <span className="text-sm text-gray-700">Female</span>
+                  </label>
                 </div>
               </div>
               
