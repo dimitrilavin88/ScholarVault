@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Search, User, LogOut, GraduationCap, Bell, BookOpen } from 'lucide-react'
 import StudentSearch from '@/components/StudentSearch'
 import RecentStudents from '@/components/RecentStudents'
-import QuickStats from '@/components/QuickStats'
 import ClassroomManager from '@/components/ClassroomManager'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -90,9 +89,6 @@ export default function DashboardPage() {
             Search for students to view their academic portfolios and work samples.
           </p>
         </div>
-
-        {/* Quick Stats */}
-        <QuickStats />
 
         {/* Search Section */}
         <div className="card mb-8">
