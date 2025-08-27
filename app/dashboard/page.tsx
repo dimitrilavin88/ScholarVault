@@ -55,7 +55,7 @@ export default function DashboardPage() {
                       })() : 'Loading...'}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {teacherData ? `Teacher - ${teacherData.school}` : 'Loading...'}
+                      {teacherData ? teacherData.school : 'Loading...'}
                     </p>
                   </div>
                 <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
