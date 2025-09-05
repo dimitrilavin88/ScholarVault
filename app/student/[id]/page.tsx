@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import WorkSampleViewer from '@/components/WorkSampleViewer'
 import { demoStudents, demoWorkSamples } from '@/data/demoData'
+import { db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 
 interface WorkSample {
   id: string
@@ -34,17 +36,21 @@ interface WorkSample {
 interface Student {
   id: string
   name: string
-  email: string
-  studentId: string
-  currentGrade: string
-  currentSchool: string
-  dateOfBirth: string
-  schoolHistory: Array<{
+  email?: string
+  studentId?: string
+  currentGrade?: string
+  currentSchool?: string
+  dateOfBirth?: string
+  schoolHistory?: Array<{
     school: string
     grade: string
     year: string
     district: string
   }>
+  // Firebase student data fields
+  gradeLevel?: string
+  classrooms?: string[]
+  createdAt?: Date
 }
 
 export default function StudentProfilePage() {
@@ -61,20 +67,68 @@ export default function StudentProfilePage() {
   })
   const [isLoading, setIsLoading] = useState(true)
 
-  // Mock data for demo
+  // Fetch student data from demo data or Firebase
   useEffect(() => {
-    const foundStudent = demoStudents.find(s => s.id === params.id)
-    const studentWorkSamples = demoWorkSamples.filter(sample => 
-      sample.title.includes(foundStudent?.name.split(' ')[0] || '') ||
-      sample.title.includes(foundStudent?.name.split(' ')[1] || '')
-    )
-
-    if (foundStudent) {
-      setStudent(foundStudent)
-      setWorkSamples(studentWorkSamples)
-      setFilteredSamples(studentWorkSamples)
+    const fetchStudentData = async () => {
+      try {
+        setIsLoading(true)
+        
+        // First try to find in demo data
+        const foundStudent = demoStudents.find(s => s.id === params.id)
+        
+        if (foundStudent) {
+          // Use demo data
+          const studentWorkSamples = demoWorkSamples.filter(sample => 
+            sample.title.includes(foundStudent?.name.split(' ')[0] || '') ||
+            sample.title.includes(foundStudent?.name.split(' ')[1] || '')
+          )
+          
+          setStudent(foundStudent)
+          setWorkSamples(studentWorkSamples)
+          setFilteredSamples(studentWorkSamples)
+        } else {
+          // Try to fetch from Firebase
+          const studentRef = doc(db, 'students', params.id as string)
+          const studentDoc = await getDoc(studentRef)
+          
+          if (studentDoc.exists()) {
+            const firebaseData = studentDoc.data()
+            const firebaseStudent: Student = {
+              id: studentDoc.id,
+              name: firebaseData.name || 'Unknown Student',
+              gradeLevel: firebaseData.gradeLevel || 'Unknown Grade',
+              classrooms: firebaseData.classrooms || [],
+              createdAt: firebaseData.createdAt?.toDate() || new Date(),
+              // Set default values for missing fields
+              email: firebaseData.email || 'No email available',
+              studentId: studentDoc.id,
+              currentGrade: firebaseData.gradeLevel || 'Unknown Grade',
+              currentSchool: 'School information not available',
+              dateOfBirth: 'Date of birth not available',
+              schoolHistory: []
+            }
+            
+            setStudent(firebaseStudent)
+            setWorkSamples([]) // No work samples for Firebase students yet
+            setFilteredSamples([])
+          } else {
+            // Student not found in either demo data or Firebase
+            setStudent(null)
+            setWorkSamples([])
+            setFilteredSamples([])
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching student data:', error)
+        setStudent(null)
+        setWorkSamples([])
+        setFilteredSamples([])
+      } finally {
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
+
+    fetchStudentData()
   }, [params.id])
 
   useEffect(() => {
@@ -161,19 +215,21 @@ export default function StudentProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="flex items-center space-x-2">
                   <Hash className="h-4 w-4 text-secondary-400" />
-                  <span className="text-sm text-secondary-600">ID: {student.studentId}</span>
+                  <span className="text-sm text-secondary-600">ID: {student.studentId || student.id}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Mail className="h-4 w-4 text-secondary-400" />
-                  <span className="text-sm text-secondary-600">{student.email}</span>
+                  <span className="text-sm text-secondary-600">{student.email || 'No email available'}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <School className="h-4 w-4 text-secondary-400" />
-                  <span className="text-sm text-secondary-600">{student.currentGrade}</span>
+                  <span className="text-sm text-secondary-600">{student.currentGrade || student.gradeLevel || 'Unknown Grade'}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Calendar className="h-4 w-4 text-secondary-400" />
-                  <span className="text-sm text-secondary-600">DOB: {new Date(student.dateOfBirth).toLocaleDateString()}</span>
+                  <span className="text-sm text-secondary-600">
+                    {student.dateOfBirth ? `DOB: ${new Date(student.dateOfBirth).toLocaleDateString()}` : 'Date of birth not available'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -183,22 +239,30 @@ export default function StudentProfilePage() {
         {/* School History */}
         <div className="card mb-8">
           <h3 className="text-xl font-semibold text-secondary-900 mb-4">School History</h3>
-          <div className="space-y-3">
-            {student.schoolHistory.map((history, index) => (
-              <div key={index} className="flex items-center space-x-4 p-3 bg-secondary-50 rounded-lg">
-                <div className="h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
-                  <School className="h-5 w-5 text-primary-600" />
+          {student.schoolHistory && student.schoolHistory.length > 0 ? (
+            <div className="space-y-3">
+              {student.schoolHistory.map((history, index) => (
+                <div key={index} className="flex items-center space-x-4 p-3 bg-secondary-50 rounded-lg">
+                  <div className="h-10 w-10 bg-primary-100 rounded-full flex items-center justify-center">
+                    <School className="h-5 w-5 text-primary-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-secondary-900">{history.school}</h4>
+                    <p className="text-sm text-secondary-600">{history.grade} • {history.year}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-secondary-500">{history.district}</p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <h4 className="font-medium text-secondary-900">{history.school}</h4>
-                  <p className="text-sm text-secondary-600">{history.grade} • {history.year}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-secondary-500">{history.district}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <School className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+              <p>No school history available</p>
+              <p className="text-sm">School history information has not been provided for this student.</p>
+            </div>
+          )}
         </div>
 
         {/* Work Samples Section */}

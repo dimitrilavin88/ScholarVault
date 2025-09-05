@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Plus, Users, BookOpen, GraduationCap, UserPlus, X, Loader2, Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import teacherDataManager from '@/lib/teacherDataManager'
 import { db } from '@/lib/firebase'
@@ -42,6 +43,7 @@ interface ClassroomManagerProps {
 
 export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
   const { teacherData, currentUser, loading } = useAuth()
+  const router = useRouter()
   
   console.log('ClassroomManager received teacherId:', teacherId)
   console.log('Current user from AuthContext:', currentUser)
@@ -98,6 +100,11 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
   const getStudentDisplayInfo = (studentId: string): Student | null => {
     // Return real student data from Firebase
     return studentsData[studentId] || null
+  }
+
+  // Handle student click to navigate to profile
+  const handleStudentClick = (studentId: string) => {
+    router.push(`/student/${studentId}`)
   }
 
   // Fetch students for the selected classroom
@@ -732,7 +739,11 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
                           }
                           
                           return (
-                            <tr key={student.id} className="hover:bg-gray-50">
+                            <tr 
+                              key={student.id} 
+                              className="hover:bg-gray-50 cursor-pointer transition-colors"
+                              onClick={() => handleStudentClick(student.id)}
+                            >
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
                                   <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -755,7 +766,10 @@ export default function ClassroomManager({ teacherId }: ClassroomManagerProps) {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <button
-                                  onClick={() => removeStudent(student.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation() // Prevent row click when clicking remove button
+                                    removeStudent(student.id)
+                                  }}
                                   className="text-red-600 hover:text-red-900 hover:bg-red-50 px-2 py-1 rounded"
                                 >
                                   Remove
