@@ -1,229 +1,190 @@
-# ScholarVault - Student Academic Portfolio System
+# ScholarVault
 
-ScholarVault is a secure web application that allows K-12 teachers to access and view student work samples from previous grades, even if the student has moved between schools or districts. The purpose is to give teachers a centralized, long-term academic portfolio for each student, making it easier to understand their progress, strengths, and learning needs over time.
+Educational record-keeping MVP: teacher dashboard, student profiles, work sample uploads, and historical records. Built for **local testing first** (Phase 1), with clear placeholders for **AWS integration** (Phase 2).
 
-## 🚀 Features
+## Stack
 
-### Core MVP Features
+- **Frontend:** Angular (latest) + TypeScript
+- **Backend:** NestJS (Node.js + TypeScript)
+- **Database:** PostgreSQL (local for Phase 1; Aurora Serverless in Phase 2)
+- **Auth:** JWT placeholders (Phase 1); AWS Cognito (Phase 2)
+- **Files:** Local storage (Phase 1); S3 (Phase 2)
 
-1. **Secure Teacher Authentication**
-
-   - Firebase Authentication with email/password
-   - Email domain validation for approved school districts
-   - Teacher profile creation and management
-   - Secure session management
-
-2. **Student Search**
-
-   - Search by name, student ID, or email
-   - See profile with school history and available work samples
-   - Cross-district access to historical data
-
-3. **Student Profile Page**
-
-   - Basic student info (name, grade, DOB, school history)
-   - Work samples organized by grade level, subject, and upload date
-   - Comprehensive school history tracking
-
-4. **Work Sample Viewing**
-
-   - Preview PDFs, images, or documents in-browser
-   - Download option for offline review
-   - File type support for various document formats
-
-5. **Cross-District Access**
-   - Authorized teachers can see historical work from prior schools
-   - All access is logged for compliance
-
-## 🛠️ Technical Stack
-
-- **Frontend:** React 18 + Next.js 13.5.6 (App Router)
-- **Styling:** Tailwind CSS
-- **Icons:** Lucide React
-- **TypeScript:** Full type safety
-- **Authentication:** Firebase Authentication
-- **Database:** Google Cloud Firestore
-- **State Management:** React Context API
-- **Responsive Design:** Mobile-first approach
-
-## 📁 Project Structure
-
-```
-ScholarVault/
-├── app/                          # Next.js app directory
-│   ├── dashboard/               # Teacher dashboard
-│   ├── student/[id]/           # Student profile pages
-│   ├── globals.css             # Global styles
-│   ├── layout.tsx              # Root layout with AuthProvider
-│   └── page.tsx                # Landing page
-├── components/                  # Reusable components
-│   ├── LoginForm.tsx           # Firebase authentication modal
-│   ├── StudentSearch.tsx       # Student search functionality
-│   ├── QuickStats.tsx          # Dashboard statistics
-│   ├── RecentStudents.tsx      # Recently viewed students
-│   └── WorkSampleViewer.tsx    # Work sample preview modal
-├── contexts/                    # React Context providers
-│   └── AuthContext.tsx         # Firebase authentication context
-├── lib/                        # Utility libraries
-│   ├── firebase.ts             # Firebase configuration
-│   └── domainValidation.ts     # Email domain validation
-├── data/                       # Mock data and interfaces
-│   └── demoData.ts             # Sample student and work sample data
-├── scripts/                    # Setup scripts
-│   └── setupFirestore.js       # Firestore initialization script
-├── package.json                # Dependencies and scripts
-├── tailwind.config.js          # Tailwind CSS configuration
-├── tsconfig.json               # TypeScript configuration
-├── firebase-config.example     # Firebase configuration template
-├── FIREBASE_SETUP.md           # Detailed Firebase setup guide
-└── README.md                   # Project documentation
-```
-
-## 🚀 Getting Started
+## Phase 1 — Local MVP
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
+- PostgreSQL 16 (or use Docker)
 - npm or yarn
-- Firebase project (see setup guide below)
 
-### Installation
+### Setting up Docker (Windows)
 
-1. **Clone the repository**
+To use the Docker option for the database:
 
-   ```bash
-   git clone <repository-url>
-   cd ScholarVault
+1. **Download Docker Desktop for Windows**
+   - [Direct download (64-bit)](https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe)
+   - Or install from [Microsoft Store](https://apps.microsoft.com/detail/xp8cbj40xlbwkx)
+
+2. **Install**
+   - Run the installer.
+   - If prompted, enable **WSL 2** (recommended) or **Hyper-V**.
+   - Restart Windows if asked.
+
+3. **Start Docker**
+   - Open **Docker Desktop** from the Start menu.
+   - Wait until it says “Docker Desktop is running” (whale icon in the system tray).
+
+4. **Verify**
+   - Open PowerShell and run:
+   ```powershell
+   docker --version
+   docker compose version
    ```
+   - You should see version numbers for both.
 
-2. **Install dependencies**
-
-   ```bash
-   npm install
+5. **Start the database**
+   - In your project folder:
+   ```powershell
+   cd c:\Users\Dimitri\ScholarVault
+   docker compose up -d
    ```
+   - The first run may take a minute while the Postgres image downloads. When it’s ready, the `scholarvault-db` container will be running and the schema + seed will have been applied.
 
-3. **Set up Firebase**
+To stop the database later: `docker compose down`. To start it again: `docker compose up -d`.
 
-   Follow the detailed setup guide in [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) to:
+**If the backend fails with "column contains null values" or schema errors**, the DB may have been created by TypeORM earlier. Reset it so Docker re-runs the schema and seed:
 
-   - Create a Firebase project
-   - Enable Authentication and Firestore
-   - Configure environment variables
-   - Set up security rules
-
-4. **Configure environment variables**
-
-   Copy `firebase-config.example` to `.env.local` and fill in your Firebase configuration:
-
-   ```bash
-   cp firebase-config.example .env.local
-   # Edit .env.local with your Firebase config
-   ```
-
-5. **Initialize Firestore**
-
-   ```bash
-   node scripts/setupFirestore.js
-   ```
-
-6. **Run the development server**
-
-   ```bash
-   npm run dev
-   ```
-
-7. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-### Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
-
-## 🔐 Firebase Setup
-
-### Quick Setup
-
-1. **Create Firebase Project**: Go to [Firebase Console](https://console.firebase.google.com/)
-2. **Enable Services**: Enable Authentication (Email/Password) and Firestore Database
-3. **Configure App**: Get your Firebase config and add to `.env.local`
-4. **Set Security Rules**: Use the rules provided in `FIREBASE_SETUP.md`
-5. **Populate Data**: Run the setup script to add approved domains
-
-### Environment Variables
-
-Create a `.env.local` file with your Firebase configuration:
-
-```bash
-NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
-NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+```powershell
+docker compose down -v
+docker compose up -d
 ```
 
-## 🧪 Testing
+Then start the backend again. (The `-v` removes the data volume so Postgres starts fresh.)
 
-### Demo Accounts
+**If you see "relation student_transfers does not exist"** (e.g. when using Request transfer), add the table. From the project root, with the Postgres container running:
 
-For testing purposes, the following domains are pre-approved:
-
-- `demo.edu` - Demo School District
-- `lincoln.edu` - Lincoln Unified School District
-- `springfield.k12.tx.us` - Springfield Independent School District
-- `ousd.org` - Oakland Unified School District
-
-### Test Flow
-
-1. Create a new teacher account with an approved email domain
-2. Sign in with your credentials
-3. Access the dashboard and search for students
-4. View student profiles and work samples
-
-## 🚀 Deployment
-
-### Build for Production
-
-```bash
-npm run build
-npm run start
+```powershell
+Get-Content database\add-student-transfers.sql | docker exec -i scholarvault-db psql -U postgres -d scholarvault
 ```
 
-### Environment Setup
+**If you see "relation classrooms does not exist"** (e.g. when using Create class), the DB was created before the classrooms feature. Add the missing tables without resetting the DB. From the project root, with the Postgres container running:
 
-Ensure your production environment has:
+```powershell
+Get-Content database\add-classrooms-enrollments.sql | docker exec -i scholarvault-db psql -U postgres -d scholarvault
+```
 
-- All required Firebase environment variables
-- Proper Firestore security rules
-- Domain authorization in Firebase Console
+Then (optional) add seed classrooms/enrollments:  
+`Get-Content database\seed.sql | docker exec -i scholarvault-db psql -U postgres -d scholarvault`  
+(Seed uses `ON CONFLICT DO NOTHING`, so it’s safe to run again.)
 
-## 📚 Documentation
+### 1. Database
 
-- [Firebase Setup Guide](./FIREBASE_SETUP.md) - Complete Firebase configuration
-- [Firebase Documentation](https://firebase.google.com/docs) - Official Firebase docs
-- [Next.js Documentation](https://nextjs.org/docs) - Next.js framework docs
+**Option A — With Docker**
 
-## 🤝 Contributing
+If Docker Desktop is installed and running, from the project root run:
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+```powershell
+docker compose up -d
+```
 
-## 📄 License
+On older setups you may have the standalone tool: `docker-compose up -d`.
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+**Option B — Without Docker**
 
-## 🆘 Support
+If Docker is not installed, use a local PostgreSQL 16 (or 15+) installation:
 
-If you encounter issues:
+1. Install PostgreSQL from [postgresql.org](https://www.postgresql.org/download/windows/) and ensure `psql` is on your PATH (or use pgAdmin / another client).
+2. Create a database named `scholarvault` (e.g. in pgAdmin: right‑click Databases → Create → Database → name: `scholarvault`).
+3. Run the schema and seed (replace with your postgres user if different):
 
-1. Check the [Firebase Setup Guide](./FIREBASE_SETUP.md)
-2. Review Firebase Console logs
-3. Check browser console for client-side errors
-4. Verify environment variables are correctly set
-5. Ensure Firestore security rules are properly configured
+```powershell
+cd ScholarVault
+psql -U postgres -d scholarvault -f database/schema.sql
+psql -U postgres -d scholarvault -f database/seed.sql
+```
+
+If `psql` is not in PATH, use the full path to it (e.g. `"C:\Program Files\PostgreSQL\16\bin\psql.exe"`) or run the contents of `database/schema.sql` and `database/seed.sql` in pgAdmin’s Query Tool.
+
+The seed adds a demo district, school, two students, and three teachers:
+
+- **teacher@demo.edu** (role: teacher) — password: `password123`
+- **admin@demo.edu** (role: admin) — password: `password123`
+- **district@demo.edu** (role: district_admin) — password: `password123`
+
+### 2. Backend
+
+```bash
+cd backend
+cp .env.example .env
+# Edit .env if needed (DB_*, JWT_SECRET, PLACEHOLDER_PASSWORD)
+npm install
+npm run start:dev
+```
+
+API runs at **http://localhost:3000**.
+
+- `POST /login` — body: `{ "email", "password" }` → `{ "access_token", "user" }`
+- `GET /students` — list students (JWT required)
+- `GET /students/:id` — student profile (JWT required)
+- `POST /students/:id/work` — upload work sample (form: gradeLevel, subject, notes, file)
+- `GET /students/:id/work` — list work samples
+- `GET /students/:studentId/records/:recordId/file` — download file (JWT required)
+
+### 3. Frontend
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+App runs at **http://localhost:4200**.
+
+- **Login:** use `teacher@demo.edu` / `password123`
+- **Dashboard:** list of students (role-based)
+- **Student profile:** view details, go to upload or historical records
+- **Upload work sample:** grade, subject, notes, optional file
+- **Historical records:** list and download work samples
+
+### Role-based UI
+
+- **teacher / admin:** see only students in their school’s district
+- **district_admin:** see all students in the system (for Phase 1 demo, same district)
+
+## Phase 2 — AWS (after local testing)
+
+Planned replacements (with placeholders in code and env):
+
+| Component      | Phase 1           | Phase 2                    |
+|----------------|-------------------|----------------------------|
+| Database       | Local PostgreSQL  | Aurora Serverless         |
+| Auth           | JWT placeholder   | Cognito + roles            |
+| File storage   | Local `uploads/`  | S3 + pre-signed URLs       |
+| Logging        | Local files       | CloudWatch                 |
+| Backend deploy | —                 | Lambda + API Gateway or ECS |
+| Frontend deploy| —                 | Amplify or S3 + CloudFront |
+
+See `backend/.env.example` and code comments for where to plug in AWS (Cognito, S3, CloudWatch, Aurora).
+
+## Security (Phase 1)
+
+- Input validation on frontend and backend (Angular + class-validator)
+- Angular’s default XSS protection (no unsafe `innerHTML` with user data)
+- Role-based access on API (teacher, admin, district_admin)
+- HTTPS and encryption at rest/transit: placeholders for Phase 2 production
+
+## Project layout
+
+```
+ScholarVault/
+├── backend/          # NestJS API
+├── frontend/         # Angular app
+├── database/         # schema.sql, seed.sql
+├── docker-compose.yml
+└── README.md
+```
+
+## License
+
+Proprietary / internal use as needed.

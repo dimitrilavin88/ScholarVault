@@ -1,0 +1,26 @@
+# Phase 1: Local PostgreSQL for ScholarVault.
+# Phase 2: Remove or keep for local dev; production uses Aurora Serverless.
+
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scholarvault-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: scholarvault
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
