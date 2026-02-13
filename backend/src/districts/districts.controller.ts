@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { DistrictsService } from './districts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -11,8 +11,8 @@ export class DistrictsController {
   constructor(private readonly districtsService: DistrictsService) {}
 
   @Get()
-  findAll() {
-    return this.districtsService.findAll();
+  findAll(@Query('state') state?: string) {
+    return this.districtsService.findAll(state);
   }
 
   @Get(':id/schools')

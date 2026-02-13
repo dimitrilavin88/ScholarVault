@@ -95,6 +95,14 @@ export class ApiService {
     return this.http.get<District[]>(`${this.base}/districts`);
   }
 
+  /** Districts in a given state (for transfer "new district" dropdown). */
+  getDistrictsByState(state: string) {
+    return this.http.get<District[]>(`${this.base}/districts`, {
+      params: { state: state.trim() },
+    });
+  }
+
+  /** Schools in a given district (for transfer "new school" dropdown). */
   getDistrictSchools(districtId: string) {
     return this.http.get<School[]>(`${this.base}/districts/${districtId}/schools`);
   }
@@ -123,6 +131,7 @@ export class ApiService {
 export interface District {
   id: string;
   name: string;
+  state: string;
 }
 
 export interface School {

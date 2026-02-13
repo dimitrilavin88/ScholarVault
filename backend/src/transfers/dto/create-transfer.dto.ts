@@ -1,14 +1,22 @@
-import { IsString, IsOptional, IsUUID, Matches, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsUUID, IsIn, Matches, MaxLength, ValidateIf } from 'class-validator';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class CreateTransferDto {
+  /** 'outbound' = sending district requests transfer; 'inbound' = receiving district requests student in */
+  @IsOptional()
+  @IsString()
+  @IsIn(['outbound', 'inbound'])
+  requestType?: 'outbound' | 'inbound';
+
+  /** Required for outbound; set from lookup for inbound */
+  @ValidateIf((o) => o.requestType !== 'inbound')
   @IsString()
   @Matches(UUID_REGEX, { message: 'studentId must be a UUID' })
-  studentId: string;
+  studentId?: string;
 
-  /** Optional; if provided, verified against student record */
-  @IsOptional()
+  /** Required for inbound (verification); optional for outbound */
+  @ValidateIf((o) => o.requestType === 'inbound')
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dob must be YYYY-MM-DD' })
   dob?: string;
@@ -17,9 +25,17 @@ export class CreateTransferDto {
   @Matches(UUID_REGEX, { message: 'oldDistrictId must be a UUID' })
   oldDistrictId: string;
 
+  /** Required for outbound; set from teacher's district for inbound */
+  @ValidateIf((o) => o.requestType !== 'inbound')
   @IsString()
   @Matches(UUID_REGEX, { message: 'newDistrictId must be a UUID' })
-  newDistrictId: string;
+  newDistrictId?: string;
+
+  /** Required for inbound: student ID from previous district (e.g. DEMO-001) */
+  @ValidateIf((o) => o.requestType === 'inbound')
+  @IsString()
+  @MaxLength(255)
+  uniqueStudentIdentifier?: string;
 
   @IsOptional()
   @IsString()

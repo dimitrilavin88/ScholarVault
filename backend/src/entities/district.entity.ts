@@ -10,6 +10,9 @@ export class District {
   @Column()
   name: string;
 
+  @Column({ type: 'varchar', length: 100 })
+  state: string;
+
   @OneToMany(() => School, (school) => school.district)
   schools: School[];
 

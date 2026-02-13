@@ -13,7 +13,13 @@ export class DistrictsService {
     private readonly schoolRepo: Repository<School>,
   ) {}
 
-  async findAll(): Promise<District[]> {
+  async findAll(state?: string): Promise<District[]> {
+    if (state != null && state.trim() !== '') {
+      return this.districtRepo.find({
+        where: { state: state.trim() },
+        order: { name: 'ASC' },
+      });
+    }
     return this.districtRepo.find({ order: { name: 'ASC' } });
   }
 

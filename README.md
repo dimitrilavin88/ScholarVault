@@ -78,6 +78,9 @@ Then (optional) add seed classrooms/enrollments:
 `Get-Content database\seed.sql | docker exec -i scholarvault-db psql -U postgres -d scholarvault`  
 (Seed uses `ON CONFLICT DO NOTHING`, so it’s safe to run again.)
 
+**If you see errors about district "state" column**, run:  
+`Get-Content database\add-district-state.sql | docker exec -i scholarvault-db psql -U postgres -d scholarvault`
+
 ### 1. Database
 
 **Option A — With Docker**

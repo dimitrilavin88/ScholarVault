@@ -20,6 +20,22 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Teacher } from '../entities/teacher.entity';
 import { CreateWorkDto } from './dto/create-work.dto';
 
+const EXT_TO_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+};
+
+function getContentType(filename: string): string | undefined {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return ext ? EXT_TO_MIME[ext] : undefined;
+}
+
 @Controller('students')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('teacher', 'admin', 'district_admin')
@@ -57,6 +73,8 @@ export class RecordsController {
       recordId,
       req.user,
     );
+    const contentType = getContentType(filename);
+    if (contentType) res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     createReadStream(filePath).pipe(res);
   }

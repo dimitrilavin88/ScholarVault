@@ -41,11 +41,11 @@ import { AuthService } from '../../core/services/auth.service';
                   </div>
                   <div class="transfer-row">
                     <span class="transfer-label">Previous school</span>
-                    <span class="transfer-value">{{ t.oldDistrict?.name }}{{ t.oldSchool?.name ? ' — ' + (t.oldSchool?.name ?? '') : '' }}</span>
+                    <span class="transfer-value">{{ t.oldDistrict?.name }}{{ t.oldDistrict?.state ? ', ' + (t.oldDistrict?.state ?? '') : '' }}{{ t.oldSchool?.name ? ' — ' + (t.oldSchool?.name ?? '') : '' }}</span>
                   </div>
                   <div class="transfer-row">
                     <span class="transfer-label">Requested new school</span>
-                    <span class="transfer-value">{{ t.newDistrict?.name || '—' }}{{ t.newSchool?.name ? ' — ' + (t.newSchool?.name ?? '') : '' }}</span>
+                    <span class="transfer-value">{{ t.newDistrict?.name || '—' }}{{ t.newDistrict?.state ? ', ' + (t.newDistrict?.state ?? '') : '' }}{{ t.newSchool?.name ? ' — ' + (t.newSchool?.name ?? '') : '' }}</span>
                   </div>
                   <div class="transfer-row">
                     <span class="transfer-label">Requested by</span>

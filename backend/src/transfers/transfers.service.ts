@@ -29,30 +29,67 @@ export class TransfersService {
     teacher: TeacherWithSchool,
     file?: Express.Multer.File,
   ): Promise<StudentTransfer> {
-    const student = await this.studentRepo.findOne({
-      where: { id: dto.studentId },
-      relations: ['district'],
-    });
-    if (!student) throw new NotFoundException('Student not found');
-    if (dto.dob && student.dob !== dto.dob) {
-      throw new BadRequestException('Date of birth does not match student record');
-    }
-    if (student.districtId !== dto.oldDistrictId) {
-      throw new BadRequestException('Student is not in the specified previous district');
-    }
-    if (teacher.role !== 'district_admin') {
-      const teacherDistrictId = teacher.school?.districtId;
-      if (teacherDistrictId && teacherDistrictId !== dto.oldDistrictId) {
-        throw new ForbiddenException('You can only request transfers for students in your district');
+    const isInbound = dto.requestType === 'inbound';
+    const teacherDistrictId = teacher.school?.districtId;
+
+    let studentId: string;
+    let oldDistrictId: string;
+    let newDistrictId: string | null;
+    let oldSchoolId: string | null = dto.oldSchoolId ?? null;
+    let newSchoolId: string | null = dto.newSchoolId ?? null;
+
+    if (isInbound) {
+      if (!dto.uniqueStudentIdentifier?.trim() || !dto.dob) {
+        throw new BadRequestException('Inbound request requires uniqueStudentIdentifier and dob');
       }
+      if (!teacherDistrictId) {
+        throw new ForbiddenException('Your account is not associated with a district');
+      }
+      const student = await this.studentRepo.findOne({
+        where: {
+          districtId: dto.oldDistrictId,
+          uniqueStudentIdentifier: dto.uniqueStudentIdentifier.trim(),
+        },
+        relations: ['district'],
+      });
+      if (!student) throw new NotFoundException('Student not found in that district with that ID');
+      if (student.dob !== dto.dob) {
+        throw new BadRequestException('Date of birth does not match student record');
+      }
+      if (student.districtId === teacherDistrictId) {
+        throw new BadRequestException('Student is already in your district');
+      }
+      studentId = student.id;
+      oldDistrictId = dto.oldDistrictId;
+      newDistrictId = teacherDistrictId;
+    } else {
+      const student = await this.studentRepo.findOne({
+        where: { id: dto.studentId! },
+        relations: ['district'],
+      });
+      if (!student) throw new NotFoundException('Student not found');
+      if (dto.dob && student.dob !== dto.dob) {
+        throw new BadRequestException('Date of birth does not match student record');
+      }
+      if (student.districtId !== dto.oldDistrictId) {
+        throw new BadRequestException('Student is not in the specified previous district');
+      }
+      if (teacher.role !== 'district_admin') {
+        if (teacherDistrictId && teacherDistrictId !== dto.oldDistrictId) {
+          throw new ForbiddenException('You can only request transfers for students in your district');
+        }
+      }
+      studentId = student.id;
+      oldDistrictId = dto.oldDistrictId;
+      newDistrictId = dto.newDistrictId ?? null;
     }
 
     const transfer = this.transferRepo.create({
-      studentId: dto.studentId,
-      oldDistrictId: dto.oldDistrictId,
-      newDistrictId: dto.newDistrictId ?? null,
-      oldSchoolId: dto.oldSchoolId ?? null,
-      newSchoolId: dto.newSchoolId ?? null,
+      studentId,
+      oldDistrictId,
+      newDistrictId,
+      oldSchoolId,
+      newSchoolId,
       requestedById: teacher.id,
       status: 'pending',
       notes: dto.notes ?? null,
@@ -91,7 +128,10 @@ export class TransfersService {
     if (!transfer) throw new NotFoundException('Transfer request not found');
     if (teacher.role !== 'district_admin') {
       const teacherDistrictId = teacher.school?.districtId;
-      if (teacherDistrictId && teacherDistrictId !== transfer.oldDistrictId) {
+      const canAccess =
+        teacherDistrictId &&
+        (teacherDistrictId === transfer.oldDistrictId || teacherDistrictId === transfer.newDistrictId);
+      if (!canAccess) {
         throw new ForbiddenException('Access denied to this transfer');
       }
     }

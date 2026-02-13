@@ -1,9 +1,39 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { DatePipe } from '@angular/common';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ApiService, Student, Record } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+
+const EXT_TO_MIME: { [key: string]: string } = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+};
+
+function detectPreviewType(blob: Blob, fileUrl: string): 'pdf' | 'image' | 'other' {
+  const mime = (blob.type || '').toLowerCase();
+  if (mime === 'application/pdf') return 'pdf';
+  if (mime.startsWith('image/')) return 'image';
+  const ext = (fileUrl.split('.').pop() || '').toLowerCase();
+  if (ext === 'pdf') return 'pdf';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) return 'image';
+  return 'other';
+}
+
+function ensureBlobType(blob: Blob, fileUrl: string, type: 'pdf' | 'image' | 'other'): Blob {
+  if (blob.type) return blob;
+  if (type === 'other') return blob;
+  const ext = (fileUrl.split('.').pop() || '').toLowerCase();
+  const mime = EXT_TO_MIME[ext] || (type === 'pdf' ? 'application/pdf' : 'image/jpeg');
+  return new Blob([blob], { type: mime });
+}
 
 @Component({
   standalone: true,
@@ -58,7 +88,7 @@ import { AuthService } from '../../core/services/auth.service';
             </div>
           </div>
 
-          <!-- Timeline: work samples (expandable cards) -->
+          <!-- Work samples: Grade → Subject → samples -->
           <section class="timeline-section">
             <h2 class="section-title">Work samples</h2>
             @if (recordsLoading()) {
@@ -70,32 +100,90 @@ import { AuthService } from '../../core/services/auth.service';
                 <a [routerLink]="['/student', student.id, 'upload']" class="btn-primary">Upload first sample</a>
               </div>
             } @else {
-              <div class="timeline">
-                @for (r of records(); track r.id) {
-                  <div class="timeline-item">
-                    <div class="timeline-marker" aria-hidden="true"></div>
-                    <div class="timeline-card card">
-                      <button type="button" class="timeline-card-head"
-                        (click)="toggleExpanded(r.id)"
-                        [attr.aria-expanded]="expandedId() === r.id">
-                        <span class="timeline-grade">{{ r.gradeLevel }} · {{ r.subject }}</span>
-                        <span class="timeline-date">{{ r.createdAt | date:'mediumDate' }}</span>
-                        <span class="timeline-chevron">{{ expandedId() === r.id ? '▼' : '▶' }}</span>
-                      </button>
-                      @if (expandedId() === r.id) {
-                        <div class="timeline-card-body">
-                          @if (r.notes) {
-                            <p class="timeline-notes">{{ r.notes }}</p>
-                          }
-                          <button type="button" class="record-download" (click)="downloadFile(r)">
-                            📥 Download file
-                          </button>
-                        </div>
+              <div class="samples-nav card">
+                <div class="nav-row">
+                  <label for="grade-select" class="nav-label">Grade level</label>
+                  <select id="grade-select" class="input-field nav-select"
+                    [value]="selectedGrade() ?? ''"
+                    (change)="onGradeChange($event)">
+                    <option value="">Select grade…</option>
+                    @for (g of gradeLevels(); track g) {
+                      <option [value]="g">{{ g }}</option>
+                    }
+                  </select>
+                </div>
+                @if (selectedGrade()) {
+                  <div class="nav-row">
+                    <label for="subject-select" class="nav-label">Subject</label>
+                    <select id="subject-select" class="input-field nav-select"
+                      [value]="selectedSubject() ?? ''"
+                      (change)="onSubjectChange($event)">
+                      <option value="">Select subject…</option>
+                      @for (s of subjectsInGrade(); track s) {
+                        <option [value]="s">{{ s }}</option>
                       }
-                    </div>
+                    </select>
                   </div>
                 }
               </div>
+              @if (selectedGrade() && selectedSubject()) {
+                <p class="samples-count">{{ filteredRecords().length }} sample{{ filteredRecords().length === 1 ? '' : 's' }} in {{ selectedSubject() }}</p>
+                <div class="timeline">
+                  @for (r of filteredRecords(); track r.id) {
+                    <div class="timeline-item">
+                      <div class="timeline-marker" aria-hidden="true"></div>
+                      <div class="timeline-card card">
+                        <button type="button" class="timeline-card-head"
+                          (click)="toggleExpanded(r.id)"
+                          [attr.aria-expanded]="expandedId() === r.id">
+                          <span class="timeline-grade">{{ r.subject }}</span>
+                          <span class="timeline-date">{{ r.createdAt | date:'mediumDate' }}</span>
+                          <span class="timeline-chevron">{{ expandedId() === r.id ? '▼' : '▶' }}</span>
+                        </button>
+                        @if (expandedId() === r.id) {
+                          <div class="timeline-card-body">
+                            @if (r.notes) {
+                              <p class="timeline-notes">{{ r.notes }}</p>
+                            }
+                            <div class="record-actions">
+                              <button type="button" class="record-action" (click)="previewFile(r)">
+                                👁 Quick view
+                              </button>
+                              <button type="button" class="record-action" (click)="downloadFile(r)">
+                                📥 Download file
+                              </button>
+                            </div>
+                            @if (previewRecordId() === r.id) {
+                              <div class="preview-toolbar">
+                                <button type="button" class="record-action" (click)="closePreview()">✕ Close preview</button>
+                              </div>
+                              @if (previewLoading()) {
+                                <div class="preview-placeholder"><span class="spinner"></span> Loading preview…</div>
+                              } @else if (previewError()) {
+                                <div class="preview-placeholder preview-error">{{ previewError() }}</div>
+                              } @else if (previewUrl() && previewType() === 'pdf') {
+                                <div class="preview-container">
+                                  <iframe [src]="previewSafeUrl()" class="preview-iframe" title="Document preview"></iframe>
+                                </div>
+                              } @else if (previewUrl() && previewType() === 'image') {
+                                <div class="preview-container">
+                                  <img [src]="previewUrl()" alt="Document preview" class="preview-image" />
+                                </div>
+                              } @else if (previewUrl() && previewType() === 'other') {
+                                <div class="preview-placeholder">Preview not available for this file type. Use Download to open it.</div>
+                              }
+                            }
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else if (selectedGrade()) {
+                <p class="samples-hint">Select a subject to view work samples for this grade.</p>
+              } @else {
+                <p class="samples-hint">Select a grade level, then a subject, to view work samples.</p>
+              }
             }
           </section>
         </div>
@@ -136,6 +224,13 @@ import { AuthService } from '../../core/services/auth.service';
     .action-row .btn-secondary { text-decoration: none; }
     .timeline-section { }
     .section-title { margin: 0 0 1rem; font-size: 1.125rem; font-weight: 600; color: var(--text); }
+    .samples-nav { padding: 1.25rem; margin-bottom: 1rem; }
+    .nav-row { margin-bottom: 0.75rem; }
+    .nav-row:last-child { margin-bottom: 0; }
+    .nav-label { display: block; margin-bottom: 0.35rem; font-size: 0.875rem; font-weight: 600; color: var(--text); }
+    .nav-select { max-width: 280px; }
+    .samples-count { font-size: 0.9375rem; color: var(--text-muted); margin: 0 0 0.75rem; }
+    .samples-hint { font-size: 0.9375rem; color: var(--text-muted); margin: 0; }
     .empty-timeline {
       padding: 2rem; text-align: center;
       display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
@@ -160,26 +255,87 @@ import { AuthService } from '../../core/services/auth.service';
     .timeline-chevron { font-size: 0.75rem; color: var(--text-muted); }
     .timeline-card-body { padding: 0 1.25rem 1rem; border-top: 1px solid var(--border); }
     .timeline-notes { margin: 0.75rem 0 0.5rem; font-size: 0.9375rem; color: var(--text-secondary); line-height: 1.5; }
-    .record-download {
-      margin-top: 0.5rem; padding: 0.4rem 0; font-size: 0.875rem; font-weight: 500;
+    .record-actions { display: flex; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap; }
+    .record-action {
+      padding: 0.4rem 0; font-size: 0.875rem; font-weight: 500;
       color: var(--primary); background: none; border: none; cursor: pointer;
     }
-    .record-download:hover { text-decoration: underline; }
+    .record-action:hover { text-decoration: underline; }
+    .preview-toolbar { margin-top: 0.75rem; }
+    .preview-placeholder {
+      margin-top: 1rem; padding: 1.5rem; text-align: center;
+      font-size: 0.9375rem; color: var(--text-muted);
+      background: var(--bg); border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    }
+    .preview-error { color: var(--error); }
+    .preview-container {
+      margin-top: 1rem; border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; background: var(--bg);
+      max-height: min(70vh, 520px); min-height: 200px;
+    }
+    .preview-iframe { width: 100%; height: 100%; min-height: 360px; border: none; display: block; }
+    .preview-image { max-width: 100%; height: auto; max-height: min(70vh, 520px); display: block; margin: 0 auto; }
   `],
 })
-export class StudentProfileComponent implements OnInit {
+export class StudentProfileComponent implements OnInit, OnDestroy {
   student: Student | null = null;
   records = signal<Record[]>([]);
   recordsLoading = signal(true);
   expandedId = signal<string | null>(null);
+  selectedGrade = signal<string | null>(null);
+  selectedSubject = signal<string | null>(null);
   loading = true;
   error = '';
+
+  /** Quick view: which record is previewed, blob URL, type, loading, error */
+  previewRecordId = signal<string | null>(null);
+  previewUrl = signal<string | null>(null);
+  previewType = signal<'pdf' | 'image' | 'other' | null>(null);
+  previewLoading = signal(false);
+  previewError = signal<string | null>(null);
+
+  /** Sanitized URL for iframe (PDF preview). */
+  previewSafeUrl = computed(() => {
+    const url = this.previewUrl();
+    return url ? this.sanitizer.bypassSecurityTrustResourceUrl(url) : null;
+  });
+
+  /** Unique grade levels from records, sorted. */
+  gradeLevels = computed(() => {
+    const set = new Set(this.records().map((r) => r.gradeLevel).filter(Boolean));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  });
+
+  /** Unique subjects in the selected grade. */
+  subjectsInGrade = computed(() => {
+    const grade = this.selectedGrade();
+    if (!grade) return [];
+    const set = new Set(
+      this.records()
+        .filter((r) => r.gradeLevel === grade)
+        .map((r) => r.subject)
+        .filter(Boolean)
+    );
+    return Array.from(set).sort();
+  });
+
+  /** Records for the selected grade and subject. */
+  filteredRecords = computed(() => {
+    const grade = this.selectedGrade();
+    const subject = this.selectedSubject();
+    if (!grade || !subject) return [];
+    return this.records().filter(
+      (r) => r.gradeLevel === grade && r.subject === subject
+    );
+  });
 
   constructor(
     private route: ActivatedRoute,
     public auth: AuthService,
     private api: ApiService,
     private http: HttpClient,
+    private sanitizer: DomSanitizer,
   ) {}
 
   ngOnInit() {
@@ -208,8 +364,63 @@ export class StudentProfileComponent implements OnInit {
     });
   }
 
+  onGradeChange(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    this.selectedGrade.set(value || null);
+    this.selectedSubject.set(null);
+    this.expandedId.set(null);
+  }
+
+  onSubjectChange(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    this.selectedSubject.set(value || null);
+    this.expandedId.set(null);
+  }
+
   toggleExpanded(id: string) {
-    this.expandedId.set(this.expandedId() === id ? null : id);
+    const next = this.expandedId() === id ? null : id;
+    this.expandedId.set(next);
+    if (next !== this.previewRecordId()) this.clearPreview();
+  }
+
+  private clearPreview() {
+    const url = this.previewUrl();
+    if (url) URL.revokeObjectURL(url);
+    this.previewRecordId.set(null);
+    this.previewUrl.set(null);
+    this.previewType.set(null);
+    this.previewError.set(null);
+    this.previewLoading.set(false);
+  }
+
+  previewFile(record: Record) {
+    if (!this.student) return;
+    this.clearPreview();
+    this.previewRecordId.set(record.id);
+    this.previewLoading.set(true);
+    this.previewError.set(null);
+    const url = this.api.getFileDownloadUrl(this.student.id, record.id);
+    this.http.get(url, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        if (this.previewRecordId() !== record.id) return; // user closed preview while loading
+        const type = detectPreviewType(blob, record.fileUrl);
+        // Use a blob with correct MIME type so the iframe/browser can render it (backend may not send Content-Type)
+        const blobForUrl = ensureBlobType(blob, record.fileUrl, type);
+        const objectUrl = URL.createObjectURL(blobForUrl);
+        this.previewUrl.set(objectUrl);
+        this.previewType.set(type);
+        this.previewLoading.set(false);
+      },
+      error: () => {
+        if (this.previewRecordId() !== record.id) return;
+        this.previewError.set('Could not load preview.');
+        this.previewLoading.set(false);
+      },
+    });
+  }
+
+  closePreview() {
+    this.clearPreview();
   }
 
   downloadFile(record: Record) {
@@ -224,5 +435,9 @@ export class StudentProfileComponent implements OnInit {
         URL.revokeObjectURL(a.href);
       },
     });
+  }
+
+  ngOnDestroy() {
+    this.clearPreview();
   }
 }

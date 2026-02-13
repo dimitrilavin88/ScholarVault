@@ -3,7 +3,8 @@
 
 CREATE TABLE IF NOT EXISTS districts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) NOT NULL
+  name VARCHAR(255) NOT NULL,
+  state VARCHAR(100) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS schools (

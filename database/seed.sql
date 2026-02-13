@@ -1,18 +1,21 @@
--- Phase 1: Seed one district, one school, one teacher for local testing.
--- Password for teacher: use PLACEHOLDER_PASSWORD (e.g. password123) or store placeholder:password123 in password_hash.
+-- Phase 1: Seed districts, schools, and teachers for local testing.
+-- Password: use PLACEHOLDER_PASSWORD (e.g. password123) or store placeholder:password123 in password_hash.
 
-INSERT INTO districts (id, name) VALUES
-  ('a0000000-0000-0000-0000-000000000001', 'Demo District')
+INSERT INTO districts (id, name, state) VALUES
+  ('a0000000-0000-0000-0000-000000000001', 'Demo District', 'California'),
+  ('a0000000-0000-0000-0000-000000000002', 'Riverside District', 'Nevada')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO schools (id, district_id, name) VALUES
-  ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'Demo School')
+  ('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'Demo School'),
+  ('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', 'Riverside Elementary')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO teachers (id, school_id, email, role, password_hash) VALUES
   ('c0000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'teacher@demo.edu', 'teacher', 'placeholder:password123'),
   ('c0000000-0000-0000-0000-000000000002', 'b0000000-0000-0000-0000-000000000001', 'admin@demo.edu', 'admin', 'placeholder:password123'),
-  ('c0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', 'district@demo.edu', 'district_admin', 'placeholder:password123')
+  ('c0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', 'district@demo.edu', 'district_admin', 'placeholder:password123'),
+  ('c0000000-0000-0000-0000-000000000004', 'b0000000-0000-0000-0000-000000000002', 'teacher@riverside.edu', 'teacher', 'placeholder:password123')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO students (id, district_id, first_name, last_name, dob, unique_student_identifier) VALUES
