@@ -37,7 +37,7 @@ export class AuthService {
         this.token.set(res.access_token);
         this.user.set(res.user);
         this.setStored(res.access_token, res.user);
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(res.user.role === 'district_admin' ? ['/district'] : ['/dashboard']);
       }),
     );
   }

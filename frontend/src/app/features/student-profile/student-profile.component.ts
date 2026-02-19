@@ -3,8 +3,9 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { DatePipe } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { ApiService, Student, Record } from '../../core/services/api.service';
+import { ApiService, Student, Record, Classroom } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
+import { FormsModule } from '@angular/forms';
 
 const EXT_TO_MIME: { [key: string]: string } = {
   pdf: 'application/pdf',
@@ -37,7 +38,7 @@ function ensureBlobType(blob: Blob, fileUrl: string, type: 'pdf' | 'image' | 'ot
 
 @Component({
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, FormsModule],
   template: `
     <div class="page-container animate-fade-in">
       @if (loading && !student) {
@@ -46,7 +47,11 @@ function ensureBlobType(blob: Blob, fileUrl: string, type: 'pdf' | 'image' | 'ot
         <div class="state-message state-error">{{ error }}</div>
       } @else if (student) {
         <nav class="breadcrumb">
-          <a routerLink="/dashboard">Dashboard</a>
+          @if (auth.hasRole('district_admin')) {
+            <a routerLink="/district">District</a>
+          } @else {
+            <a routerLink="/dashboard">Dashboard</a>
+          }
           <span class="breadcrumb-sep">/</span>
           <a routerLink="/students">Students</a>
           <span class="breadcrumb-sep">/</span>
@@ -59,33 +64,93 @@ function ensureBlobType(blob: Blob, fileUrl: string, type: 'pdf' | 'image' | 'ot
               <h1 class="profile-name">{{ student.firstName }} {{ student.lastName }}</h1>
               <span class="profile-id">ID: {{ student.uniqueStudentIdentifier }}</span>
             </div>
-            <dl class="details-list">
-              <div class="detail-row">
-                <dt>Date of birth</dt>
-                <dd>{{ student.dob }}</dd>
+            @if (auth.hasRole('district_admin') && editingStudent()) {
+              <form class="edit-form" (ngSubmit)="saveStudent()">
+                <div class="form-row">
+                  <label for="edit-firstName">First name</label>
+                  <input id="edit-firstName" class="input-field" [(ngModel)]="editForm.firstName" name="firstName" required />
+                </div>
+                <div class="form-row">
+                  <label for="edit-lastName">Last name</label>
+                  <input id="edit-lastName" class="input-field" [(ngModel)]="editForm.lastName" name="lastName" required />
+                </div>
+                <div class="form-row">
+                  <label for="edit-dob">Date of birth</label>
+                  <input id="edit-dob" class="input-field" type="date" [(ngModel)]="editForm.dob" name="dob" required />
+                </div>
+                <div class="form-row">
+                  <label for="edit-identifier">Student ID</label>
+                  <input id="edit-identifier" class="input-field" [(ngModel)]="editForm.uniqueStudentIdentifier" name="uniqueStudentIdentifier" required />
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn-primary" [disabled]="savingStudent()">Save</button>
+                  <button type="button" class="btn-secondary" (click)="cancelEdit()">Cancel</button>
+                </div>
+              </form>
+            } @else {
+              <dl class="details-list">
+                <div class="detail-row">
+                  <dt>Date of birth</dt>
+                  <dd>{{ student.dob }}</dd>
+                </div>
+                @if (student.district) {
+                  <div class="detail-row">
+                    <dt>District</dt>
+                    <dd>{{ student.district.name }}</dd>
+                  </div>
+                }
+                @if (student.parents?.length) {
+                  <div class="detail-row">
+                    <dt>Parent contact</dt>
+                    <dd>
+                      @for (p of student.parents; track p.id) {
+                        <span>{{ p.email }}</span>
+                        @if (!$last) { <span>, </span> }
+                      }
+                    </dd>
+                  </div>
+                }
+              </dl>
+              <div class="action-row">
+                @if (auth.hasRole('district_admin')) {
+                  <button type="button" class="btn-primary" (click)="startEditStudent()">✏️ Edit student</button>
+                  <a [routerLink]="['/student', student.id, 'records']" class="btn-secondary">View all records</a>
+                } @else {
+                  <a [routerLink]="['/student', student.id, 'upload']" class="btn-primary">📤 Upload work sample</a>
+                  <a [routerLink]="['/student', student.id, 'records']" class="btn-secondary">View all records</a>
+                }
               </div>
-              @if (student.district) {
-                <div class="detail-row">
-                  <dt>District</dt>
-                  <dd>{{ student.district.name }}</dd>
-                </div>
-              }
-              @if (student.parents?.length) {
-                <div class="detail-row">
-                  <dt>Parent contact</dt>
-                  <dd>
-                    @for (p of student.parents; track p.id) {
-                      <span>{{ p.email }}</span>
-                      @if (!$last) { <span>, </span> }
+            }
+
+            @if (auth.hasRole('district_admin')) {
+              <section class="placement-section">
+                <h2 class="section-title">Placement</h2>
+                @if (placementLoading()) {
+                  <div class="state-message"><span class="spinner"></span> Loading placement…</div>
+                } @else {
+                  <ul class="placement-list">
+                    @for (c of studentClassrooms(); track c.id) {
+                      <li class="placement-item">
+                        <span class="placement-name">{{ c.name }}{{ c.school ? ' — ' + c.school.name : '' }}</span>
+                        <button type="button" class="btn-remove" (click)="removeFromClassroom(c.id)" [disabled]="placementActionLoading()">Remove</button>
+                      </li>
                     }
-                  </dd>
-                </div>
-              }
-            </dl>
-            <div class="action-row">
-              <a [routerLink]="['/student', student.id, 'upload']" class="btn-primary">📤 Upload work sample</a>
-              <a [routerLink]="['/student', student.id, 'records']" class="btn-secondary">View all records</a>
-            </div>
+                  </ul>
+                  @if (studentClassrooms().length === 0) {
+                    <p class="placement-empty">Not enrolled in any class.</p>
+                  }
+                  <div class="placement-add">
+                    <select class="input-field placement-select" [value]="addClassroomId()" (change)="onAddClassroomChange($event)">
+                      <option value="">Add to class…</option>
+                      @for (c of availableClassrooms(); track c.id) {
+                        <option [value]="c.id">{{ c.name }}{{ c.school ? ' — ' + c.school.name : '' }}</option>
+                      }
+                    </select>
+                    <button type="button" class="btn-primary" (click)="addToClassroom()" [disabled]="!addClassroomId() || placementActionLoading()">Add</button>
+                  </div>
+                }
+              </section>
+            }
           </div>
 
           <!-- Work samples: Grade → Subject → samples -->
@@ -276,6 +341,19 @@ function ensureBlobType(blob: Blob, fileUrl: string, type: 'pdf' | 'image' | 'ot
     }
     .preview-iframe { width: 100%; height: 100%; min-height: 360px; border: none; display: block; }
     .preview-image { max-width: 100%; height: auto; max-height: min(70vh, 520px); display: block; margin: 0 auto; }
+    .edit-form { margin: 1rem 0; padding: 1rem 0; border-top: 1px solid var(--border); }
+    .form-row { margin-bottom: 0.75rem; }
+    .form-row label { display: block; margin-bottom: 0.35rem; font-size: 0.875rem; font-weight: 600; color: var(--text); }
+    .form-actions { display: flex; gap: 0.75rem; margin-top: 1rem; }
+    .placement-section { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+    .placement-list { list-style: none; padding: 0; margin: 0 0 1rem; }
+    .placement-item { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+    .placement-name { font-size: 0.9375rem; }
+    .btn-remove { font-size: 0.875rem; color: var(--error); background: none; border: none; cursor: pointer; padding: 0.25rem 0; }
+    .btn-remove:hover:not(:disabled) { text-decoration: underline; }
+    .placement-empty { font-size: 0.9375rem; color: var(--text-muted); margin: 0 0 1rem; }
+    .placement-add { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+    .placement-select { min-width: 200px; flex: 1; }
   `],
 })
 export class StudentProfileComponent implements OnInit, OnDestroy {
@@ -287,6 +365,21 @@ export class StudentProfileComponent implements OnInit, OnDestroy {
   selectedSubject = signal<string | null>(null);
   loading = true;
   error = '';
+
+  /** District admin: edit form and placement */
+  editingStudent = signal(false);
+  editForm: { firstName: string; lastName: string; dob: string; uniqueStudentIdentifier: string } = { firstName: '', lastName: '', dob: '', uniqueStudentIdentifier: '' };
+  savingStudent = signal(false);
+  studentClassrooms = signal<Classroom[]>([]);
+  allClassrooms = signal<Classroom[]>([]);
+  placementLoading = signal(false);
+  placementActionLoading = signal(false);
+  addClassroomId = signal<string>('');
+
+  availableClassrooms = computed(() => {
+    const enrolled = new Set(this.studentClassrooms().map((c) => c.id));
+    return this.allClassrooms().filter((c) => !enrolled.has(c.id));
+  });
 
   /** Quick view: which record is previewed, blob URL, type, loading, error */
   previewRecordId = signal<string | null>(null);
@@ -356,11 +449,85 @@ export class StudentProfileComponent implements OnInit, OnDestroy {
           },
           error: () => this.recordsLoading.set(false),
         });
+        if (this.auth.hasRole('district_admin')) {
+          this.loadPlacement(id);
+          this.api.getClassrooms().subscribe({ next: (list) => this.allClassrooms.set(list) });
+        }
       },
       error: (err) => {
         this.error = err?.error?.message || 'Failed to load student';
         this.loading = false;
       },
+    });
+  }
+
+  private loadPlacement(studentId: string) {
+    this.placementLoading.set(true);
+    this.api.getStudentClassrooms(studentId).subscribe({
+      next: (list) => {
+        this.studentClassrooms.set(list);
+        this.placementLoading.set(false);
+      },
+      error: () => this.placementLoading.set(false),
+    });
+  }
+
+  startEditStudent() {
+    if (!this.student) return;
+    this.editForm = {
+      firstName: this.student.firstName,
+      lastName: this.student.lastName,
+      dob: this.student.dob,
+      uniqueStudentIdentifier: this.student.uniqueStudentIdentifier,
+    };
+    this.editingStudent.set(true);
+  }
+
+  cancelEdit() {
+    this.editingStudent.set(false);
+  }
+
+  saveStudent() {
+    if (!this.student) return;
+    this.savingStudent.set(true);
+    this.api.updateStudent(this.student.id, this.editForm).subscribe({
+      next: (updated) => {
+        this.student = updated;
+        this.editingStudent.set(false);
+        this.savingStudent.set(false);
+      },
+      error: () => this.savingStudent.set(false),
+    });
+  }
+
+  onAddClassroomChange(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    this.addClassroomId.set(value || '');
+  }
+
+  addToClassroom() {
+    const classroomId = this.addClassroomId();
+    if (!this.student || !classroomId) return;
+    this.placementActionLoading.set(true);
+    this.api.addStudentToClassroom(classroomId, this.student.id).subscribe({
+      next: () => {
+        this.loadPlacement(this.student!.id);
+        this.addClassroomId.set('');
+        this.placementActionLoading.set(false);
+      },
+      error: () => this.placementActionLoading.set(false),
+    });
+  }
+
+  removeFromClassroom(classroomId: string) {
+    if (!this.student) return;
+    this.placementActionLoading.set(true);
+    this.api.removeStudentFromClassroom(classroomId, this.student.id).subscribe({
+      next: () => {
+        this.loadPlacement(this.student!.id);
+        this.placementActionLoading.set(false);
+      },
+      error: () => this.placementActionLoading.set(false),
     });
   }
 

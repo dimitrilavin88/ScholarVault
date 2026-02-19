@@ -12,7 +12,7 @@ import { District } from './district.entity';
 import { School } from './school.entity';
 import { Teacher } from './teacher.entity';
 
-export type TransferStatus = 'pending' | 'approved' | 'rejected';
+export type TransferStatus = 'pending_release' | 'released' | 'approved' | 'rejected';
 
 @Entity('student_transfers')
 export class StudentTransfer {
@@ -40,7 +40,10 @@ export class StudentTransfer {
   @Column({ name: 'approved_by', nullable: true })
   approvedById: string | null;
 
-  @Column({ type: 'varchar', length: 20, default: 'pending' })
+  @Column({ name: 'released_by', nullable: true })
+  releasedById: string | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'pending_release' })
   status: TransferStatus;
 
   @Column({ name: 'proof_file_url', type: 'varchar', length: 1024, nullable: true })
@@ -82,4 +85,8 @@ export class StudentTransfer {
   @ManyToOne(() => Teacher, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'approved_by' })
   approvedBy: Teacher | null;
+
+  @ManyToOne(() => Teacher, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'released_by' })
+  releasedBy: Teacher | null;
 }

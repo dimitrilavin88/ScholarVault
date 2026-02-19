@@ -89,30 +89,6 @@ import { AuthService } from '../../core/services/auth.service';
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="field">
-              <span class="label">Previous district</span>
-              @if (selectedStudent()?.district) {
-                <p class="value-text">{{ selectedStudent()!.district!.name }}</p>
-              } @else {
-                <p class="value-text muted">Select a student above</p>
-              }
-            </div>
-            <div class="field">
-              <label for="oldSchoolId" class="label">Previous school (optional)</label>
-              <select
-                id="oldSchoolId"
-                name="oldSchoolId"
-                [(ngModel)]="oldSchoolId"
-                class="input-field">
-                <option value="">—</option>
-                @for (s of oldSchools(); track s.id) {
-                  <option [value]="s.id">{{ s.name }}</option>
-                }
-              </select>
-            </div>
-          </div>
-
           <div class="field">
               <label for="newState" class="label">State (new district) <span class="required">*</span></label>
               <select
@@ -193,6 +169,9 @@ import { AuthService } from '../../core/services/auth.service';
               {{ submitting() ? 'Submitting…' : 'Submit transfer request' }}
             </button>
             <a routerLink="/dashboard" class="btn-secondary link-btn">Cancel</a>
+            @if (!formOut.valid) {
+              <span class="form-hint invalid-hint">Select student, state, and new district to enable submit.</span>
+            }
           </div>
         </form>
       </div>
@@ -333,7 +312,8 @@ import { AuthService } from '../../core/services/auth.service';
     .hint { display: block; margin-top: 0.25rem; font-size: 0.8125rem; color: var(--text-muted); }
     .file-input { display: block; margin-top: 0.35rem; }
     .file-name { font-size: 0.875rem; color: var(--text-muted); margin-left: 0.5rem; }
-    .form-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; }
+    .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1.25rem; }
+    .form-hint.invalid-hint { font-size: 0.875rem; color: var(--text-muted); }
     .link-btn { text-decoration: none; display: inline-flex; align-items: center; }
     .value-text { margin: 0.35rem 0 0; font-size: 0.9375rem; color: var(--text); }
     .value-text.muted { color: var(--text-muted); }
@@ -381,14 +361,12 @@ export class TransferRequestComponent implements OnInit {
   districts = signal<District[]>([]);
   /** Districts in the selected state — populated by API when state is selected. */
   districtsInState = signal<District[]>([]);
-  oldSchools = signal<School[]>([]);
   /** Schools in the selected new district — populated by API when district is selected. */
   newSchools = signal<School[]>([]);
 
   studentId = '';
   dob = '';
   oldDistrictId = '';
-  oldSchoolId = '';
   newState = '';
   newDistrictId = '';
   newSchoolId = '';
@@ -437,7 +415,16 @@ export class TransferRequestComponent implements OnInit {
 
   ngOnInit(): void {
     this.api.getStudents().subscribe({
-      next: (list) => this.students.set(list),
+      next: (list) => {
+        // Ensure every student has districtId (backend sends it; fallback for district.id or snake_case)
+        const normalized = list.map((s) => {
+          const raw = s as Student & { district_id?: string };
+          const districtId =
+            s.districtId ?? raw.district_id ?? (s.district && typeof s.district === 'object' ? (s.district as { id: string }).id : '') ?? '';
+          return { ...s, districtId };
+        });
+        this.students.set(normalized);
+      },
       error: () => this.students.set([]),
     });
     this.api.getDistricts().subscribe({
@@ -449,25 +436,11 @@ export class TransferRequestComponent implements OnInit {
   onStudentChange(): void {
     const s = this.selectedStudent();
     if (s) {
-      this.oldDistrictId = s.districtId;
+      this.oldDistrictId = this.getStudentDistrictId(s);
       this.dob = s.dob || '';
-      this.loadOldSchools();
     } else {
       this.oldDistrictId = '';
-      this.oldSchoolId = '';
-      this.oldSchools.set([]);
     }
-  }
-
-  loadOldSchools(): void {
-    if (!this.oldDistrictId) {
-      this.oldSchools.set([]);
-      return;
-    }
-    this.api.getDistrictSchools(this.oldDistrictId).subscribe({
-      next: (list) => this.oldSchools.set(list),
-      error: () => this.oldSchools.set([]),
-    });
   }
 
   onNewStateChange(): void {
@@ -546,18 +519,57 @@ export class TransferRequestComponent implements OnInit {
     this.inboundProofFile.set(file ?? null);
   }
 
+  /** Get district id from a student (API may return districtId or district.id or snake_case). */
+  private getStudentDistrictId(student: Student | null | undefined): string {
+    if (!student) return '';
+    const d = student as Student & { district_id?: string };
+    return (
+      student.districtId ??
+      student.district?.id ??
+      d.district_id ??
+      ''
+    );
+  }
+
   onSubmitOutbound(): void {
     this.successMessage.set(null);
     this.errorMessage.set(null);
-    if (!this.studentId || !this.oldDistrictId || !this.newDistrictId) return;
+    const sel = this.selectedStudent();
+    let derivedOldDistrictId = this.getStudentDistrictId(sel);
+    if (derivedOldDistrictId) this.oldDistrictId = derivedOldDistrictId;
 
+    if (!this.studentId || !this.oldDistrictId || !this.newDistrictId) {
+      if (this.studentId && !this.oldDistrictId) {
+        // Fallback: fetch this student from API to get districtId
+        this.api.getStudent(this.studentId).subscribe({
+          next: (student) => {
+            const did = this.getStudentDistrictId(student);
+            if (did) {
+              this.oldDistrictId = did;
+              this.submitOutboundRequest();
+            } else {
+              this.errorMessage.set('The selected student has no district on file. Please use a different student or contact support.');
+            }
+          },
+          error: () => {
+            this.errorMessage.set('The selected student has no district on file. Please use a different student or contact support.');
+          },
+        });
+        return;
+      }
+      this.errorMessage.set('Please select a student, state, and new district.');
+      return;
+    }
+    this.submitOutboundRequest();
+  }
+
+  private submitOutboundRequest(): void {
     const formData = new FormData();
     formData.append('requestType', 'outbound');
     formData.append('studentId', this.studentId);
     formData.append('oldDistrictId', this.oldDistrictId);
     formData.append('newDistrictId', this.newDistrictId);
     if (this.dob) formData.append('dob', this.dob);
-    if (this.oldSchoolId) formData.append('oldSchoolId', this.oldSchoolId);
     if (this.newSchoolId) formData.append('newSchoolId', this.newSchoolId);
     if (this.notes) formData.append('notes', this.notes);
     const file = this.proofFile();
@@ -571,7 +583,6 @@ export class TransferRequestComponent implements OnInit {
         this.studentId = '';
         this.dob = '';
         this.oldDistrictId = '';
-        this.oldSchoolId = '';
         this.newState = '';
         this.newDistrictId = '';
         this.newSchoolId = '';
@@ -580,9 +591,17 @@ export class TransferRequestComponent implements OnInit {
       },
       error: (err) => {
         this.submitting.set(false);
-        this.errorMessage.set(err?.error?.message ?? 'Failed to submit transfer request.');
+        this.errorMessage.set(this.apiErrorMessage(err) ?? 'Failed to submit transfer request.');
       },
     });
+  }
+
+  /** Normalize API error (NestJS may return message as string or string[]). */
+  private apiErrorMessage(err: { error?: { message?: string | string[] } }): string | undefined {
+    const m = err?.error?.message;
+    if (Array.isArray(m)) return m.join('. ');
+    if (typeof m === 'string') return m;
+    return undefined;
   }
 
   onSubmitInbound(): void {
@@ -617,7 +636,7 @@ export class TransferRequestComponent implements OnInit {
       },
       error: (err) => {
         this.submitting.set(false);
-        this.errorMessage.set(err?.error?.message ?? 'Failed to submit inbound request.');
+        this.errorMessage.set(this.apiErrorMessage(err) ?? 'Failed to submit inbound request.');
       },
     });
   }

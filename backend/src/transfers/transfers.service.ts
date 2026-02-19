@@ -91,7 +91,7 @@ export class TransfersService {
       oldSchoolId,
       newSchoolId,
       requestedById: teacher.id,
-      status: 'pending',
+      status: 'pending_release',
       notes: dto.notes ?? null,
     });
     const saved = await this.transferRepo.save(transfer);
@@ -109,13 +109,30 @@ export class TransfersService {
     return this.findOne(saved.id, teacher);
   }
 
-  async findPending(teacher: TeacherWithSchool): Promise<StudentTransfer[]> {
+  /** Transfers awaiting this district's release (sending district, step 1). */
+  async findForRelease(teacher: TeacherWithSchool): Promise<StudentTransfer[]> {
     if (teacher.role !== 'district_admin') {
       throw new ForbiddenException('Only district admins can view the transfer approval dashboard');
     }
+    const districtId = teacher.school?.districtId;
+    if (!districtId) return [];
     return this.transferRepo.find({
-      where: { status: 'pending' },
+      where: { status: 'pending_release', oldDistrictId: districtId },
       relations: ['student', 'oldDistrict', 'newDistrict', 'oldSchool', 'newSchool', 'requestedBy'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /** Transfers awaiting this district's acceptance (receiving district, step 2). */
+  async findForAccept(teacher: TeacherWithSchool): Promise<StudentTransfer[]> {
+    if (teacher.role !== 'district_admin') {
+      throw new ForbiddenException('Only district admins can view the transfer approval dashboard');
+    }
+    const districtId = teacher.school?.districtId;
+    if (!districtId) return [];
+    return this.transferRepo.find({
+      where: { status: 'released', newDistrictId: districtId },
+      relations: ['student', 'oldDistrict', 'newDistrict', 'oldSchool', 'newSchool', 'requestedBy', 'releasedBy'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -123,7 +140,7 @@ export class TransfersService {
   async findOne(id: string, teacher: TeacherWithSchool): Promise<StudentTransfer> {
     const transfer = await this.transferRepo.findOne({
       where: { id },
-      relations: ['student', 'oldDistrict', 'newDistrict', 'oldSchool', 'newSchool', 'requestedBy', 'approvedBy'],
+      relations: ['student', 'oldDistrict', 'newDistrict', 'oldSchool', 'newSchool', 'requestedBy', 'approvedBy', 'releasedBy'],
     });
     if (!transfer) throw new NotFoundException('Transfer request not found');
     if (teacher.role !== 'district_admin') {
@@ -138,21 +155,49 @@ export class TransfersService {
     return transfer;
   }
 
-  async approve(
+  /** Sending district admin releases the student (step 1). */
+  async release(id: string, teacher: TeacherWithSchool, notes?: string): Promise<StudentTransfer> {
+    if (teacher.role !== 'district_admin') {
+      throw new ForbiddenException('Only district admins can release transfers');
+    }
+    const districtId = teacher.school?.districtId;
+    if (!districtId) throw new ForbiddenException('Your account is not associated with a district');
+    const transfer = await this.transferRepo.findOne({ where: { id }, relations: ['student'] });
+    if (!transfer) throw new NotFoundException('Transfer request not found');
+    if (transfer.status !== 'pending_release') {
+      throw new BadRequestException(`Transfer cannot be released (status: ${transfer.status})`);
+    }
+    if (transfer.oldDistrictId !== districtId) {
+      throw new ForbiddenException('Only the sending district can release this transfer');
+    }
+    transfer.status = 'released';
+    transfer.releasedById = teacher.id;
+    if (notes != null) transfer.notes = (transfer.notes ? transfer.notes + '\n' : '') + notes;
+    await this.transferRepo.save(transfer);
+    return this.findOne(id, teacher);
+  }
+
+  /** Receiving district admin accepts the student (step 2); moves student to new district. */
+  async accept(
     id: string,
     teacher: TeacherWithSchool,
     notes?: string,
   ): Promise<StudentTransfer> {
     if (teacher.role !== 'district_admin') {
-      throw new ForbiddenException('Only district admins can approve transfers');
+      throw new ForbiddenException('Only district admins can accept transfers');
     }
+    const districtId = teacher.school?.districtId;
+    if (!districtId) throw new ForbiddenException('Your account is not associated with a district');
     const transfer = await this.transferRepo.findOne({
       where: { id },
       relations: ['student'],
     });
     if (!transfer) throw new NotFoundException('Transfer request not found');
-    if (transfer.status !== 'pending') {
-      throw new BadRequestException(`Transfer is already ${transfer.status}`);
+    if (transfer.status !== 'released') {
+      throw new BadRequestException(`Transfer cannot be accepted (status: ${transfer.status})`);
+    }
+    if (transfer.newDistrictId !== districtId) {
+      throw new ForbiddenException('Only the receiving district can accept this transfer');
     }
     if (transfer.newDistrictId) {
       await this.studentRepo.update(transfer.studentId, {
@@ -166,6 +211,7 @@ export class TransfersService {
     return this.findOne(id, teacher);
   }
 
+  /** Either district admin can reject (sending from pending_release, receiving from pending_release or released). */
   async reject(
     id: string,
     teacher: TeacherWithSchool,
@@ -174,10 +220,17 @@ export class TransfersService {
     if (teacher.role !== 'district_admin') {
       throw new ForbiddenException('Only district admins can reject transfers');
     }
+    const districtId = teacher.school?.districtId;
+    if (!districtId) throw new ForbiddenException('Your account is not associated with a district');
     const transfer = await this.transferRepo.findOne({ where: { id } });
     if (!transfer) throw new NotFoundException('Transfer request not found');
-    if (transfer.status !== 'pending') {
+    if (transfer.status !== 'pending_release' && transfer.status !== 'released') {
       throw new BadRequestException(`Transfer is already ${transfer.status}`);
+    }
+    const isSending = transfer.oldDistrictId === districtId;
+    const isReceiving = transfer.newDistrictId === districtId;
+    if (!isSending && !isReceiving) {
+      throw new ForbiddenException('Only the sending or receiving district can reject this transfer');
     }
     transfer.status = 'rejected';
     transfer.approvedById = teacher.id;

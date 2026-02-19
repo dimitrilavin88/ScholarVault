@@ -19,48 +19,63 @@ import { SelectedClassService } from '../core/services/selected-class.service';
       }
       <!-- Sidebar -->
       <aside class="sidebar" [class.open]="sidebarOpen()">
-        <a routerLink="/dashboard" class="logo" (click)="sidebarOpen.set(false)">
+        <a [routerLink]="auth.hasRole('district_admin') ? '/district' : '/dashboard'" class="logo" (click)="sidebarOpen.set(false)">
           <span class="logo-icon" aria-hidden="true">📚</span>
           <span class="logo-text">ScholarVault</span>
         </a>
-        <!-- Class selector: affects Dashboard and Students when a class is selected -->
-        <div class="class-selector-wrap">
-          <label for="class-select" class="class-selector-label">Class</label>
-          <select id="class-select" class="class-select input-field"
-            [value]="selectedClass.selectedClassroomId() ?? ''"
-            (change)="onClassChange($event)">
-            <option value="">All classes</option>
-            @for (c of selectedClass.classroomsList(); track c.id) {
-              <option [value]="c.id">{{ c.name }}</option>
-            }
-          </select>
-        </div>
+        @if (!auth.hasRole('district_admin')) {
+          <!-- Class selector: for teachers/admins only -->
+          <div class="class-selector-wrap">
+            <label for="class-select" class="class-selector-label">Class</label>
+            <select id="class-select" class="class-select input-field"
+              [value]="selectedClass.selectedClassroomId() ?? ''"
+              (change)="onClassChange($event)">
+              <option value="">All classes</option>
+              @for (c of selectedClass.classroomsList(); track c.id) {
+                <option [value]="c.id">{{ c.name }}</option>
+              }
+            </select>
+          </div>
+        }
         <nav class="sidebar-nav" aria-label="Main navigation">
-          <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
-            class="nav-item" (click)="sidebarOpen.set(false)">
-            <span class="nav-icon" aria-hidden="true">🏠</span>
-            <span class="nav-label">Dashboard</span>
-          </a>
-          <a routerLink="/students" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
-            <span class="nav-icon" aria-hidden="true">👥</span>
-            <span class="nav-label">Students</span>
-          </a>
-          <a routerLink="/classrooms" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
-            <span class="nav-icon" aria-hidden="true">🏫</span>
-            <span class="nav-label">Classrooms</span>
-          </a>
-          <a routerLink="/records" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
-            <span class="nav-icon" aria-hidden="true">📋</span>
-            <span class="nav-label">Records</span>
-          </a>
-          <a routerLink="/transfer-request" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
-            <span class="nav-icon" aria-hidden="true">🔄</span>
-            <span class="nav-label">Request transfer</span>
-          </a>
           @if (auth.hasRole('district_admin')) {
+            <a routerLink="/district" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-item" (click)="sidebarOpen.set(false)">
+              <span class="nav-icon" aria-hidden="true">🏛️</span>
+              <span class="nav-label">District</span>
+            </a>
+            <a routerLink="/students" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
+              <span class="nav-icon" aria-hidden="true">👥</span>
+              <span class="nav-label">Students</span>
+            </a>
             <a routerLink="/transfer-approvals" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
               <span class="nav-icon" aria-hidden="true">✅</span>
               <span class="nav-label">Transfer approvals</span>
+            </a>
+          } @else {
+            <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
+              class="nav-item" (click)="sidebarOpen.set(false)">
+              <span class="nav-icon" aria-hidden="true">🏠</span>
+              <span class="nav-label">Dashboard</span>
+            </a>
+            <a routerLink="/students" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
+              <span class="nav-icon" aria-hidden="true">👥</span>
+              <span class="nav-label">Students</span>
+            </a>
+            <a routerLink="/classrooms" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
+              <span class="nav-icon" aria-hidden="true">🏫</span>
+              <span class="nav-label">Classrooms</span>
+            </a>
+            <a routerLink="/records" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
+              <span class="nav-icon" aria-hidden="true">📋</span>
+              <span class="nav-label">Records</span>
+            </a>
+            <a routerLink="/transfer-request" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
+              <span class="nav-icon" aria-hidden="true">🔄</span>
+              <span class="nav-label">Request transfer</span>
+            </a>
+            <a routerLink="/class-transfers" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">
+              <span class="nav-icon" aria-hidden="true">📤</span>
+              <span class="nav-label">Class transfer</span>
             </a>
           }
           <a routerLink="/settings" routerLinkActive="active" class="nav-item" (click)="sidebarOpen.set(false)">

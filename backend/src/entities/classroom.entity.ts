@@ -17,6 +17,12 @@ export class Classroom {
   @Column()
   name: string;
 
+  @Column({ name: 'grade_level', type: 'varchar', length: 32, nullable: true })
+  gradeLevel: string | null;
+
+  @Column({ name: 'is_homeroom', default: false })
+  isHomeroom: boolean;
+
   @ManyToOne(() => Teacher, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'teacher_id' })
   teacher: Teacher;

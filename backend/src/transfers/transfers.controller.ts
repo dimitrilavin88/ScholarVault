@@ -38,10 +38,16 @@ export class TransfersController {
     return this.transfersService.create(dto, req.user, file);
   }
 
-  @Get()
+  @Get('release')
   @Roles('district_admin')
-  findPending(@Req() req: ReqUser) {
-    return this.transfersService.findPending(req.user);
+  findForRelease(@Req() req: ReqUser) {
+    return this.transfersService.findForRelease(req.user);
+  }
+
+  @Get('accept')
+  @Roles('district_admin')
+  findForAccept(@Req() req: ReqUser) {
+    return this.transfersService.findForAccept(req.user);
   }
 
   @Get(':id')
@@ -50,10 +56,16 @@ export class TransfersController {
     return this.transfersService.findOne(id, req.user);
   }
 
-  @Patch(':id/approve')
+  @Patch(':id/release')
   @Roles('district_admin')
-  approve(@Param('id') id: string, @Body() dto: ApproveRejectDto, @Req() req: ReqUser) {
-    return this.transfersService.approve(id, req.user, dto?.notes);
+  release(@Param('id') id: string, @Body() dto: ApproveRejectDto, @Req() req: ReqUser) {
+    return this.transfersService.release(id, req.user, dto?.notes);
+  }
+
+  @Patch(':id/accept')
+  @Roles('district_admin')
+  accept(@Param('id') id: string, @Body() dto: ApproveRejectDto, @Req() req: ReqUser) {
+    return this.transfersService.accept(id, req.user, dto?.notes);
   }
 
   @Patch(':id/reject')

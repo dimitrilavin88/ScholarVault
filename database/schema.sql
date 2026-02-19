@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS teachers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   email VARCHAR(255) NOT NULL UNIQUE,
+  first_name VARCHAR(255),
+  last_name VARCHAR(255),
   role VARCHAR(32) NOT NULL CHECK (role IN ('teacher', 'admin', 'district_admin')),
   password_hash VARCHAR(255)
 );
@@ -51,7 +53,9 @@ CREATE TABLE IF NOT EXISTS classrooms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   teacher_id UUID NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
-  name VARCHAR(255) NOT NULL
+  name VARCHAR(255) NOT NULL,
+  grade_level VARCHAR(32),
+  is_homeroom BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS enrollments (
@@ -73,14 +77,30 @@ CREATE TABLE IF NOT EXISTS student_transfers (
   new_school_id UUID REFERENCES schools(id) ON DELETE SET NULL,
   requested_by UUID NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
   approved_by UUID REFERENCES teachers(id) ON DELETE SET NULL,
-  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  released_by UUID REFERENCES teachers(id) ON DELETE SET NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending_release' CHECK (status IN ('pending_release', 'released', 'approved', 'rejected')),
   proof_file_url VARCHAR(1024),
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS class_transfer_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  from_classroom_id UUID NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  to_classroom_id UUID NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+  requested_by_teacher_id UUID NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  resolved_at TIMESTAMP,
+  resolved_by_teacher_id UUID REFERENCES teachers(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_classrooms_teacher ON classrooms(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_enrollments_classroom ON enrollments(classroom_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id);
+CREATE INDEX IF NOT EXISTS idx_class_transfer_requests_status ON class_transfer_requests(status);
+CREATE INDEX IF NOT EXISTS idx_class_transfer_requests_requested_by ON class_transfer_requests(requested_by_teacher_id);
 CREATE INDEX IF NOT EXISTS idx_transfers_status ON student_transfers(status);
 CREATE INDEX IF NOT EXISTS idx_transfers_student ON student_transfers(student_id);

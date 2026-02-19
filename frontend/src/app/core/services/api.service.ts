@@ -31,6 +31,29 @@ export interface Classroom {
   teacherId: string;
   schoolId: string;
   name: string;
+  school?: { id: string; name: string; districtId: string };
+  teacher?: { id: string; email: string };
+}
+
+export interface DistrictHomeroom {
+  teacher: { id: string; email: string; firstName?: string | null; lastName?: string | null };
+  classroom: { id: string; name: string };
+}
+
+export interface ClassTransferRequest {
+  id: string;
+  studentId: string;
+  fromClassroomId: string;
+  toClassroomId: string;
+  requestedByTeacherId: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  resolvedAt: string | null;
+  resolvedByTeacherId: string | null;
+  createdAt: string;
+  student?: Student;
+  fromClassroom?: Classroom & { teacher?: { id: string; email: string; firstName?: string | null; lastName?: string | null } };
+  toClassroom?: Classroom & { teacher?: { id: string; email: string; firstName?: string | null; lastName?: string | null } };
+  requestedBy?: { id: string; email: string; firstName?: string | null; lastName?: string | null };
 }
 
 @Injectable({ providedIn: 'root' })
@@ -41,6 +64,11 @@ export class ApiService {
 
   getClassrooms() {
     return this.http.get<Classroom[]>(`${this.base}/classrooms`);
+  }
+
+  /** All classrooms in the teacher's school (for class transfer dropdown). */
+  getClassroomsInMySchool() {
+    return this.http.get<Classroom[]>(`${this.base}/classrooms/school-classrooms`);
   }
 
   getClassroom(id: string) {
@@ -79,6 +107,34 @@ export class ApiService {
     return this.http.get<Student>(`${this.base}/students/${id}`);
   }
 
+  updateStudent(id: string, dto: { firstName?: string; lastName?: string; dob?: string; uniqueStudentIdentifier?: string }) {
+    return this.http.patch<Student>(`${this.base}/students/${id}`, dto);
+  }
+
+  getStudentClassrooms(studentId: string) {
+    return this.http.get<Classroom[]>(`${this.base}/students/${studentId}/classrooms`);
+  }
+
+  /** District admin: schools in my district */
+  getMyDistrictSchools() {
+    return this.http.get<School[]>(`${this.base}/district/schools`);
+  }
+
+  /** District admin: students in the district with no class assignment (pending enrollment). */
+  getUnenrolledStudents() {
+    return this.http.get<Student[]>(`${this.base}/district/unenrolled-students`);
+  }
+
+  /** District admin: grade levels in a school */
+  getDistrictGradeLevels(schoolId: string) {
+    return this.http.get<string[]>(`${this.base}/district/schools/${schoolId}/grade-levels`);
+  }
+
+  /** District admin: homerooms (teacher + classroom) at a grade in a school */
+  getDistrictHomerooms(schoolId: string, gradeLevel: string) {
+    return this.http.get<DistrictHomeroom[]>(`${this.base}/district/schools/${schoolId}/grade-levels/${encodeURIComponent(gradeLevel)}/homerooms`);
+  }
+
   getStudentWork(studentId: string) {
     return this.http.get<Record[]>(`${this.base}/students/${studentId}/work`);
   }
@@ -111,20 +167,46 @@ export class ApiService {
     return this.http.post<Transfer>(`${this.base}/transfers`, formData);
   }
 
-  getPendingTransfers() {
-    return this.http.get<Transfer[]>(`${this.base}/transfers`);
+  getTransfersForRelease() {
+    return this.http.get<Transfer[]>(`${this.base}/transfers/release`);
+  }
+
+  getTransfersForAccept() {
+    return this.http.get<Transfer[]>(`${this.base}/transfers/accept`);
   }
 
   getTransfer(id: string) {
     return this.http.get<Transfer>(`${this.base}/transfers/${id}`);
   }
 
-  approveTransfer(id: string, notes?: string) {
-    return this.http.patch<Transfer>(`${this.base}/transfers/${id}/approve`, { notes });
+  releaseTransfer(id: string, notes?: string) {
+    return this.http.patch<Transfer>(`${this.base}/transfers/${id}/release`, { notes });
+  }
+
+  acceptTransfer(id: string, notes?: string) {
+    return this.http.patch<Transfer>(`${this.base}/transfers/${id}/accept`, { notes });
   }
 
   rejectTransfer(id: string, notes?: string) {
     return this.http.patch<Transfer>(`${this.base}/transfers/${id}/reject`, { notes });
+  }
+
+  /** Class transfer (within same school): create request. */
+  createClassTransfer(dto: { studentId: string; fromClassroomId: string; toClassroomId: string }) {
+    return this.http.post<ClassTransferRequest>(`${this.base}/class-transfers`, dto);
+  }
+
+  /** Class transfer: requests awaiting my acceptance. */
+  getClassTransferIncoming() {
+    return this.http.get<ClassTransferRequest[]>(`${this.base}/class-transfers/incoming`);
+  }
+
+  acceptClassTransfer(id: string) {
+    return this.http.patch<ClassTransferRequest>(`${this.base}/class-transfers/${id}/accept`, {});
+  }
+
+  rejectClassTransfer(id: string) {
+    return this.http.patch<ClassTransferRequest>(`${this.base}/class-transfers/${id}/reject`, {});
   }
 }
 
@@ -149,7 +231,8 @@ export interface Transfer {
   newSchoolId: string | null;
   requestedById: string;
   approvedById: string | null;
-  status: 'pending' | 'approved' | 'rejected';
+  releasedById: string | null;
+  status: 'pending_release' | 'released' | 'approved' | 'rejected';
   proofFileUrl: string | null;
   notes: string | null;
   createdAt: string;
@@ -161,4 +244,5 @@ export interface Transfer {
   newSchool?: School | null;
   requestedBy?: { id: string; email: string };
   approvedBy?: { id: string; email: string } | null;
+  releasedBy?: { id: string; email: string } | null;
 }

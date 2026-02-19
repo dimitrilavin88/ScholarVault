@@ -16,8 +16,10 @@ import { Record } from './entities/record.entity';
 import { Classroom } from './entities/classroom.entity';
 import { Enrollment } from './entities/enrollment.entity';
 import { StudentTransfer } from './entities/student-transfer.entity';
+import { ClassTransferRequest } from './entities/class-transfer-request.entity';
 import { ClassroomsModule } from './classrooms/classrooms.module';
 import { TransfersModule } from './transfers/transfers.module';
+import { ClassTransfersModule } from './class-transfers/class-transfers.module';
 import { DistrictsModule } from './districts/districts.module';
 
 @Module({
@@ -31,18 +33,19 @@ import { DistrictsModule } from './districts/districts.module';
       username: process.env.DB_USERNAME || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
       database: process.env.DB_DATABASE || 'scholarvault',
-      entities: [District, School, Teacher, Student, Parent, Record, Classroom, Enrollment, StudentTransfer],
+      entities: [District, School, Teacher, Student, Parent, Record, Classroom, Enrollment, StudentTransfer, ClassTransferRequest],
       // Use schema from database/schema.sql (Docker or manual). Set DB_SYNCHRONIZE=true only on empty DB.
       synchronize: process.env.DB_SYNCHRONIZE === 'true',
       logging: process.env.DB_LOGGING === 'true',
     }),
-    TypeOrmModule.forFeature([District, School, Teacher, Student, Parent, Record, Classroom, Enrollment, StudentTransfer]),
+    TypeOrmModule.forFeature([District, School, Teacher, Student, Parent, Record, Classroom, Enrollment, StudentTransfer, ClassTransferRequest]),
     CommonModule,
     AuthModule,
     StudentsModule,
     RecordsModule,
     ClassroomsModule,
     TransfersModule,
+    ClassTransfersModule,
     DistrictsModule,
   ],
 })

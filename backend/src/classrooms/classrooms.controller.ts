@@ -30,6 +30,11 @@ export class ClassroomsController {
     return this.classroomsService.findAll(req.user);
   }
 
+  @Get('school-classrooms')
+  findClassroomsInMySchool(@Req() req: Request & { user: Teacher }) {
+    return this.classroomsService.findClassroomsInMySchool(req.user);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: Request & { user: Teacher }) {
     return this.classroomsService.findOne(id, req.user);

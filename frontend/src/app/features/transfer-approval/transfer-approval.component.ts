@@ -1,6 +1,7 @@
 import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import { ApiService, Transfer } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 
@@ -18,65 +19,123 @@ import { AuthService } from '../../core/services/auth.service';
         @if (loading()) {
           <div class="state-message">
             <span class="spinner"></span>
-            <span>Loading pending requests…</span>
+            <span>Loading transfer requests…</span>
           </div>
         } @else if (error()) {
           <div class="state-message state-error">{{ error() }}</div>
-        } @else if (transfers().length === 0) {
-          <div class="state-message empty-state">
-            <span class="empty-icon">📋</span>
-            <p>No pending transfer requests.</p>
-          </div>
         } @else {
-          <ul class="transfer-list">
-            @for (t of transfers(); track t.id) {
-              <li class="transfer-item card">
-                <div class="transfer-main">
-                  <div class="transfer-row">
-                    <span class="transfer-label">Student</span>
-                    <a [routerLink]="['/student', t.studentId]" class="transfer-value link">
-                      {{ t.student?.firstName }} {{ t.student?.lastName }}
-                      ({{ t.student?.uniqueStudentIdentifier }})
-                    </a>
-                  </div>
-                  <div class="transfer-row">
-                    <span class="transfer-label">Previous school</span>
-                    <span class="transfer-value">{{ t.oldDistrict?.name }}{{ t.oldDistrict?.state ? ', ' + (t.oldDistrict?.state ?? '') : '' }}{{ t.oldSchool?.name ? ' — ' + (t.oldSchool?.name ?? '') : '' }}</span>
-                  </div>
-                  <div class="transfer-row">
-                    <span class="transfer-label">Requested new school</span>
-                    <span class="transfer-value">{{ t.newDistrict?.name || '—' }}{{ t.newDistrict?.state ? ', ' + (t.newDistrict?.state ?? '') : '' }}{{ t.newSchool?.name ? ' — ' + (t.newSchool?.name ?? '') : '' }}</span>
-                  </div>
-                  <div class="transfer-row">
-                    <span class="transfer-label">Requested by</span>
-                    <span class="transfer-value">{{ t.requestedBy?.email }}</span>
-                  </div>
-                  <div class="transfer-row">
-                    <span class="transfer-label">Date</span>
-                    <span class="transfer-value">{{ formatDate(t.createdAt) }}</span>
-                  </div>
-                  @if (t.notes) {
-                    <div class="transfer-row">
-                      <span class="transfer-label">Notes</span>
-                      <span class="transfer-value notes">{{ t.notes }}</span>
+          <section class="transfer-section">
+            <h2 class="section-title">Awaiting your release</h2>
+            <p class="section-desc">Students leaving your district. Release the student so the receiving district can accept.</p>
+            @if (transfersForRelease().length === 0) {
+              <div class="state-message empty-state">
+                <span class="empty-icon">📤</span>
+                <p>No requests awaiting your release.</p>
+              </div>
+            } @else {
+              <ul class="transfer-list">
+                @for (t of transfersForRelease(); track t.id) {
+                  <li class="transfer-item card">
+                    <div class="transfer-main">
+                      <div class="transfer-row">
+                        <span class="transfer-label">Student</span>
+                        <a [routerLink]="['/student', t.studentId]" class="transfer-value link">
+                          {{ t.student?.firstName }} {{ t.student?.lastName }}
+                          ({{ t.student?.uniqueStudentIdentifier }})
+                        </a>
+                      </div>
+                      <div class="transfer-row">
+                        <span class="transfer-label">Requested new district</span>
+                        <span class="transfer-value">{{ t.newDistrict?.name || '—' }}{{ t.newDistrict?.state ? ', ' + (t.newDistrict?.state ?? '') : '' }}{{ t.newSchool?.name ? ' — ' + (t.newSchool?.name ?? '') : '' }}</span>
+                      </div>
+                      <div class="transfer-row">
+                        <span class="transfer-label">Requested by</span>
+                        <span class="transfer-value">{{ t.requestedBy?.email }}</span>
+                      </div>
+                      <div class="transfer-row">
+                        <span class="transfer-label">Date</span>
+                        <span class="transfer-value">{{ formatDate(t.createdAt) }}</span>
+                      </div>
+                      @if (t.notes) {
+                        <div class="transfer-row">
+                          <span class="transfer-label">Notes</span>
+                          <span class="transfer-value notes">{{ t.notes }}</span>
+                        </div>
+                      }
                     </div>
-                  }
-                </div>
-                <div class="transfer-actions">
-                  @if (actionMessage(t.id)(); as msg) {
-                    <span class="action-feedback" [class.error]="msg.error">{{ msg.text }}</span>
-                  } @else {
-                    <button type="button" class="btn-primary btn-approve" (click)="approve(t.id)" [disabled]="actionLoading(t.id)()">
-                      Approve
-                    </button>
-                    <button type="button" class="btn-secondary btn-reject" (click)="reject(t.id)" [disabled]="actionLoading(t.id)()">
-                      Reject
-                    </button>
-                  }
-                </div>
-              </li>
+                    <div class="transfer-actions">
+                      @if (actionMessage(t.id)(); as msg) {
+                        <span class="action-feedback" [class.error]="msg.error">{{ msg.text }}</span>
+                      } @else {
+                        <button type="button" class="btn-primary btn-release" (click)="release(t.id)" [disabled]="actionLoading(t.id)()">
+                          Release
+                        </button>
+                        <button type="button" class="btn-secondary btn-reject" (click)="reject(t.id)" [disabled]="actionLoading(t.id)()">
+                          Deny
+                        </button>
+                      }
+                    </div>
+                  </li>
+                }
+              </ul>
             }
-          </ul>
+          </section>
+          <section class="transfer-section">
+            <h2 class="section-title">Awaiting your acceptance</h2>
+            <p class="section-desc">Students entering your district (released by sending district). Accept to complete the transfer.</p>
+            @if (transfersForAccept().length === 0) {
+              <div class="state-message empty-state">
+                <span class="empty-icon">📥</span>
+                <p>No requests awaiting your acceptance.</p>
+              </div>
+            } @else {
+              <ul class="transfer-list">
+                @for (t of transfersForAccept(); track t.id) {
+                  <li class="transfer-item card">
+                    <div class="transfer-main">
+                      <div class="transfer-row">
+                        <span class="transfer-label">Student</span>
+                        <a [routerLink]="['/student', t.studentId]" class="transfer-value link">
+                          {{ t.student?.firstName }} {{ t.student?.lastName }}
+                          ({{ t.student?.uniqueStudentIdentifier }})
+                        </a>
+                      </div>
+                      <div class="transfer-row">
+                        <span class="transfer-label">From district</span>
+                        <span class="transfer-value">{{ t.oldDistrict?.name }}{{ t.oldDistrict?.state ? ', ' + (t.oldDistrict?.state ?? '') : '' }}{{ t.oldSchool?.name ? ' — ' + (t.oldSchool?.name ?? '') : '' }}</span>
+                      </div>
+                      <div class="transfer-row">
+                        <span class="transfer-label">Released by</span>
+                        <span class="transfer-value">{{ t.releasedBy?.email ?? '—' }}</span>
+                      </div>
+                      <div class="transfer-row">
+                        <span class="transfer-label">Date</span>
+                        <span class="transfer-value">{{ formatDate(t.createdAt) }}</span>
+                      </div>
+                      @if (t.notes) {
+                        <div class="transfer-row">
+                          <span class="transfer-label">Notes</span>
+                          <span class="transfer-value notes">{{ t.notes }}</span>
+                        </div>
+                      }
+                    </div>
+                    <div class="transfer-actions">
+                      @if (actionMessage(t.id)(); as msg) {
+                        <span class="action-feedback" [class.error]="msg.error">{{ msg.text }}</span>
+                      } @else {
+                        <button type="button" class="btn-primary btn-accept" (click)="accept(t.id)" [disabled]="actionLoading(t.id)()">
+                          Accept
+                        </button>
+                        <button type="button" class="btn-secondary btn-reject" (click)="reject(t.id)" [disabled]="actionLoading(t.id)()">
+                          Deny
+                        </button>
+                      }
+                    </div>
+                  </li>
+                }
+              </ul>
+            }
+          </section>
         }
       </div>
     </div>
@@ -106,14 +165,21 @@ import { AuthService } from '../../core/services/auth.service';
     .transfer-value.link { color: var(--primary); text-decoration: none; }
     .transfer-value.link:hover { text-decoration: underline; }
     .transfer-actions { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
-    .btn-approve { background: var(--success, #0d9488); }
-    .btn-approve:hover:not(:disabled) { filter: brightness(1.1); }
+    .transfer-section { margin-bottom: 2rem; }
+    .transfer-section:last-child { margin-bottom: 0; }
+    .section-title { margin: 0 0 0.25rem; font-size: 1.125rem; font-weight: 600; color: var(--text); }
+    .section-desc { margin: 0 0 1rem; font-size: 0.875rem; color: var(--text-secondary); }
+    .btn-release { background: var(--primary); }
+    .btn-release:hover:not(:disabled) { filter: brightness(1.1); }
+    .btn-accept { background: var(--success, #0d9488); }
+    .btn-accept:hover:not(:disabled) { filter: brightness(1.1); }
     .action-feedback { font-size: 0.875rem; color: var(--primary); }
     .action-feedback.error { color: var(--error); }
   `],
 })
 export class TransferApprovalComponent implements OnInit {
-  transfers = signal<Transfer[]>([]);
+  transfersForRelease = signal<Transfer[]>([]);
+  transfersForAccept = signal<Transfer[]>([]);
   loading = signal(true);
   error = signal<string | null>(null);
   private actionLoadingMap = new Map<string, WritableSignal<boolean>>();
@@ -145,9 +211,13 @@ export class TransferApprovalComponent implements OnInit {
   load(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.api.getPendingTransfers().subscribe({
-      next: (list) => {
-        this.transfers.set(list);
+    forkJoin({
+      release: this.api.getTransfersForRelease(),
+      accept: this.api.getTransfersForAccept(),
+    }).subscribe({
+      next: ({ release, accept }) => {
+        this.transfersForRelease.set(release);
+        this.transfersForAccept.set(accept);
         this.loading.set(false);
       },
       error: (err) => {
@@ -163,20 +233,38 @@ export class TransferApprovalComponent implements OnInit {
     return d.toLocaleDateString(undefined, { dateStyle: 'medium' });
   }
 
-  approve(id: string): void {
+  release(id: string): void {
     const loadingSig = this.actionLoading(id);
     const msgSig = this.actionMessage(id);
     loadingSig.set(true);
     msgSig.set(null);
-    this.api.approveTransfer(id).subscribe({
+    this.api.releaseTransfer(id).subscribe({
       next: () => {
         loadingSig.set(false);
-        msgSig.set({ text: 'Approved.' });
-        this.transfers.update((list) => list.filter((t) => t.id !== id));
+        msgSig.set({ text: 'Released.' });
+        this.transfersForRelease.update((list) => list.filter((t) => t.id !== id));
       },
       error: (err) => {
         loadingSig.set(false);
-        msgSig.set({ text: err?.error?.message ?? 'Failed to approve', error: true });
+        msgSig.set({ text: err?.error?.message ?? 'Failed to release', error: true });
+      },
+    });
+  }
+
+  accept(id: string): void {
+    const loadingSig = this.actionLoading(id);
+    const msgSig = this.actionMessage(id);
+    loadingSig.set(true);
+    msgSig.set(null);
+    this.api.acceptTransfer(id).subscribe({
+      next: () => {
+        loadingSig.set(false);
+        msgSig.set({ text: 'Accepted.' });
+        this.transfersForAccept.update((list) => list.filter((t) => t.id !== id));
+      },
+      error: (err) => {
+        loadingSig.set(false);
+        msgSig.set({ text: err?.error?.message ?? 'Failed to accept', error: true });
       },
     });
   }
@@ -190,7 +278,8 @@ export class TransferApprovalComponent implements OnInit {
       next: () => {
         loadingSig.set(false);
         msgSig.set({ text: 'Rejected.' });
-        this.transfers.update((list) => list.filter((t) => t.id !== id));
+        this.transfersForRelease.update((list) => list.filter((t) => t.id !== id));
+        this.transfersForAccept.update((list) => list.filter((t) => t.id !== id));
       },
       error: (err) => {
         loadingSig.set(false);

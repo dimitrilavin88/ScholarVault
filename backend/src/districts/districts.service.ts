@@ -31,4 +31,11 @@ export class DistrictsService {
       order: { name: 'ASC' },
     });
   }
+
+  async findSchoolByIdAndDistrict(schoolId: string, districtId: string): Promise<School> {
+    const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+    if (!school) throw new NotFoundException('School not found');
+    if (school.districtId !== districtId) throw new NotFoundException('School not found');
+    return school;
+  }
 }
